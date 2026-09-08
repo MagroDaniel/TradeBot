@@ -81,7 +81,8 @@ class TelegramNotifier:
                     icon = "✅" if p.result == "green" else "❌"
                     profit = p.profit_units or 0
                     sign = "+" if profit >= 0 else ""
-                    lines.append(f"{icon} {p.selection} · odd {p.odds:.2f} · {sign}{profit:.1%}")
+                    odd_label = f"odd {p.odds:.2f}" + (f" ({p.bookmaker})" if p.bookmaker else "")
+                    lines.append(f"{icon} {p.selection} · {odd_label} · {sign}{profit:.1%}")
                 lines.append("")
 
         greens = [p for p in resolved if p.result == "green"]
@@ -127,7 +128,8 @@ class TelegramNotifier:
                     lines.append(f"   ⚠️ <i>{note}</i>")
                 for p in match_picks:
                     sign = "+" if p.ev >= 0 else ""
-                    lines.append(f"   🎯 {p.selection} — odd {p.odds:.2f}")
+                    odd_label = f"odd {p.odds:.2f}" + (f" ({p.bookmaker})" if p.bookmaker else "")
+                    lines.append(f"   🎯 {p.selection} — {odd_label}")
                     lines.append(f"   📈 EV {sign}{p.ev:.0%}  ·  💵 {p.suggested_stake_fraction:.1%} banca")
                 lines.append("")
             lines.append("")

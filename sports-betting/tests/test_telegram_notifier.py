@@ -78,6 +78,25 @@ def test_send_daily_picks_no_news_note_omits_warning_line(monkeypatch):
     assert "⚠️" not in sent["text"]
 
 
+def test_send_daily_picks_shows_bookmaker_next_to_odds(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", bookmaker="Bet365")]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert "odd 4.49 (Bet365)" in sent["text"]
+
+
+def test_send_daily_picks_omits_bookmaker_when_absent(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", bookmaker=None)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert "odd 4.49" in sent["text"]
+    assert "(" not in sent["text"].split("odd 4.49")[1].split("\n")[0]
+
+
 def test_send_daily_picks_no_games_today(monkeypatch):
     sent = _capture_sent_text(monkeypatch)
 
@@ -109,6 +128,15 @@ def test_send_results_summary_groups_by_match_and_shows_icons(monkeypatch):
     assert "✅" in text
     assert "❌" in text
     assert "1/2" in text  # 1 acerto de 2 resolvidos
+
+
+def test_send_results_summary_shows_bookmaker_next_to_odds(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", result="green", profit_units=0.013, bookmaker="Pinnacle")]
+
+    TelegramNotifier("token", "chat").send_results_summary("2026-09-07", picks)
+
+    assert "odd 4.49 (Pinnacle)" in sent["text"]
 
 
 def test_send_results_summary_no_resolved_picks(monkeypatch):

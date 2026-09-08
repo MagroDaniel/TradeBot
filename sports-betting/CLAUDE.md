@@ -84,6 +84,10 @@ A avaliação por evento (`_evaluate_event`) é a lógica de decisão central e 
 de apostas para cada uma das 10 seleções: vitória do mandante / empate / vitória do visitante / over 2.5 /
 under 2.5 / ambas marcam / ambas não marcam / dupla chance ×3) → `calculate_ev()` do `ev.py` → filtra por
 `config.EV_THRESHOLD` → `capped_stake()` do `kelly.py` para o sizing → filtra stake `> 0` → gera um `Pick`.
+`_best_odds_by_selection` devolve `(odd, casa)` por seleção, não só a odd — o `title` da casa (ex: "Bet365")
+vem junto no `Pick.bookmaker` e aparece na mensagem do Telegram entre parênteses ao lado da odd, já que
+casas diferentes pagam preços diferentes pra mesma seleção. Campo opcional (`None` em picks salvos antes
+dele existir, carregados via `Pick(**p)` — o default cobre isso sem migração de dado).
 
 Os resultados são enviados ao Telegram nesta ordem fixa (resultados de ontem, depois picks de hoje) — é uma
 decisão de produto deliberada, não incidental; preserve essa ordem se mexer no `main()`.

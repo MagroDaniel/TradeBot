@@ -159,7 +159,7 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
         logger.warning("Sem histórico calibrado para %s x %s — pulando", home_team, away_team)
         return []
 
-    best_odds = _best_odds_by_selection(event)
+    best_odds = _best_odds_by_selection(event)  # selection -> (odd, casa de apostas)
     selection_prob_map = {
         f"{home_team} vence": probs["home_win"],
         "Empate": probs["draw"],
@@ -175,9 +175,10 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
 
     candidates: list[Pick] = []
     for selection, model_prob in selection_prob_map.items():
-        odds = best_odds.get(selection)
-        if odds is None:
+        best = best_odds.get(selection)
+        if best is None:
             continue
+        odds, bookmaker = best
 
         ev = calculate_ev(model_prob, odds)
         if ev < config.EV_THRESHOLD:
@@ -200,6 +201,7 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
                 model_probability=model_prob,
                 ev=ev,
                 suggested_stake_fraction=stake,
+                bookmaker=bookmaker,
             )
         )
 
@@ -243,13 +245,16 @@ def _check_news(picks: list[Pick]) -> dict[str, str]:
     return notes
 
 
-def _best_odds_by_selection(event: dict) -> dict[str, float]:
-    """Melhor odd disponível entre as casas de apostas para cada seleção do evento."""
+def _best_odds_by_selection(event: dict) -> dict[str, tuple[float, str]]:
+    """Melhor odd disponível entre as casas de apostas para cada seleção do evento, junto com
+    o nome de exibição (`title`) da casa que ofereceu essa odd — usado na mensagem do Telegram
+    pra deixar claro onde apostar, já que casas diferentes pagam preços diferentes."""
     home_team = event["home_team"]
     away_team = event["away_team"]
-    best: dict[str, float] = {}
+    best: dict[str, tuple[float, str]] = {}
 
     for bookmaker in event.get("bookmakers", []):
+        bookmaker_name = bookmaker.get("title", bookmaker.get("key", "?"))
         for market in bookmaker.get("markets", []):
             for outcome in market.get("outcomes", []):
                 name = outcome["name"]
@@ -276,8 +281,8 @@ def _best_odds_by_selection(event: dict) -> dict[str, float]:
                 else:
                     continue
 
-                if selection not in best or price > best[selection]:
-                    best[selection] = price
+                if selection not in best or price > best[selection][0]:
+                    best[selection] = (price, bookmaker_name)
 
     return best
 
