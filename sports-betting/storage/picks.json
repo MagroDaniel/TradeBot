@@ -1,21 +1,6 @@
 {
   "2026-09-08": [
     {
-      "event_id": "33aa4b8a301a13b229e96901d831fd38",
-      "match": "Borussia Dortmund x Villarreal",
-      "home_team": "Borussia Dortmund",
-      "away_team": "Villarreal",
-      "commence_time": "2026-09-08T19:00:00Z",
-      "market": "soccer_uefa_champs_league:1x2/totals",
-      "selection": "Borussia Dortmund vence",
-      "odds": 1.87,
-      "model_probability": 0.5619908401186672,
-      "ev": 0.05092287102190762,
-      "suggested_stake_fraction": 0.014633008914341284,
-      "result": null,
-      "profit_units": null
-    },
-    {
       "event_id": "259414448d0b88e42b454f4e7deca152",
       "match": "Real Madrid x Inter Milan",
       "home_team": "Real Madrid",
@@ -53,9 +38,9 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Under 2.5 gols",
-      "odds": 2.82,
+      "odds": 2.85,
       "model_probability": 0.4803198440853528,
-      "ev": 0.3545019603206947,
+      "ev": 0.3689115556432554,
       "suggested_stake_fraction": 0.03,
       "result": null,
       "profit_units": null
@@ -128,9 +113,9 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Ambas não marcam",
-      "odds": 2.34,
+      "odds": 2.35,
       "model_probability": 0.5261045689391003,
-      "ev": 0.23108469131749465,
+      "ev": 0.23634573700688577,
       "suggested_stake_fraction": 0.03,
       "result": null,
       "profit_units": null
