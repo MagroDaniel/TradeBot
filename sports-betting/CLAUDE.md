@@ -50,9 +50,15 @@ As credenciais são variáveis de ambiente obrigatórias (`ODDS_API_KEY`, `TELEG
 `TELEGRAM_CHAT_ID`), carregadas via `.env` (ver `.env.example`) através do `config.py`. O `config.py`
 levanta `RuntimeError` na importação se elas estiverem faltando — ou seja, o `main.py` não pode ser
 importado sem um `.env` válido, mas os módulos em `model/`, `analysis/`, `data/historical_loader.py`,
-`data/schedule.py`, `data/team_aliases.py`, `data/odds_client.py`, `alerts/telegram_notifier.py`,
-`storage/` e `backtest/` não têm essa dependência, por isso a suíte de testes cobre todos esses (mockando
-`requests` nos módulos com I/O de rede, sem precisar de credenciais reais).
+`data/schedule.py`, `data/team_aliases.py`, `data/odds_client.py`, `data/news_check.py`,
+`alerts/telegram_notifier.py`, `storage/` e `backtest/` não têm essa dependência, por isso a suíte de testes
+cobre todos esses (mockando `requests`/`anthropic` nos módulos com I/O de rede, sem precisar de credenciais
+reais). `ANTHROPIC_API_KEY` e `ODDS_API_KEYS_EXTRA` são opcionais — ver "Checagem de notícias" e "Fronteira
+de acesso a dados" abaixo.
+
+**`TELEGRAM_CHAT_ID` de grupo é negativo** (ex: `-5374137733`) — diferente de chat pessoal (positivo). Erro
+comum: copiar o ID do JSON do `getUpdates` sem o sinal de `-`. Se o bot foi movido pra um grupo e parou de
+mandar mensagem, esse é o primeiro lugar a checar.
 
 ## Arquitetura
 
@@ -70,6 +76,8 @@ instância de `OddsAPIClient`:
    `OddsAPIClient.get_upcoming_odds`, filtra só os jogos de **hoje em BRT**
    (`is_same_day_brt`), busca mercados adicionais por evento (`_with_additional_markets`, ver
    "Fronteira de acesso a dados") e avalia cada evento.
+4. **`_check_news()`** — opcional (ver "Checagem de notícias" abaixo): checa lesão/suspensão pros jogos que
+   geraram pick, um por partida.
 
 A avaliação por evento (`_evaluate_event`) é a lógica de decisão central e conecta os outros módulos:
 `PoissonModel.match_probabilities()` → compara com `_best_odds_by_selection()` (melhor preço entre as casas
@@ -170,15 +178,42 @@ UTC), o que só coincidia com o dia certo em BRT por sorte de horário; agora é
 todo o pipeline. `is_same_day_brt` compara o `commence_time` (ISO, UTC, formato da Odds API) convertido pra
 BRT contra uma data de referência.
 
+### Checagem de notícias (`data/news_check.py`)
+
+Opcional (requer `config.ANTHROPIC_API_KEY`; sem ela `main.py::_check_news` retorna `{}` direto, sem
+chamar nada) — a **primeira dependência paga** do projeto, ao contrário de todo o resto (Odds API free
+tier, Telegram grátis). `NewsChecker.check_match()` usa `client.messages.create` com a tool
+`web_search_20260209` (modelo `claude-opus-5`, `output_config={"effort": "low"}` pra manter rápido/barato —
+é uma tarefa de extração simples, não precisa de raciocínio pesado) perguntando se há lesão/suspensão/
+desfalque relevante pro confronto, e devolve no máximo 2 frases em português ou `None`.
+
+**Puramente informativo — nunca ajusta `model_probability`, EV ou stake.** Foi uma decisão explícita do
+usuário depois de eu apresentar as opções: traduzir "jogador X machucado" num ajuste numérico na força do
+time seria uma heurística subjetiva demais pra confiar sem supervisão. O aviso só aparece como uma linha
+extra (`⚠️ <i>...</i>`) na mensagem do Telegram, abaixo do horário/confronto — ver `send_daily_picks` em
+`alerts/telegram_notifier.py`.
+
+Chamado só pros jogos que **já geraram pick** (`main.py::_check_news`, um por partida, não por pick — um
+jogo pode ter vários picks) — não pra todo jogo de hoje, o que manteria o custo baixo mesmo em dias
+movimentados. Nunca levanta exceção (`check_match` captura tudo e retorna `None` em erro) — é uma etapa
+opcional, não pode derrubar o envio dos picks.
+
+**Cuidado ao processar a resposta**: `response.content` vem com múltiplos blocos de texto quando o modelo
+usa a ferramenta de busca — um bloco de narração antes ("vou pesquisar...") e a resposta final depois.
+Pegue só o **último** bloco de texto (`text_blocks[-1]`), nunca concatene todos — foi um bug real encontrado
+e corrigido nesta sessão (o texto ficava com "I'll search for..." colado na frente do aviso de verdade).
+
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
 Agrupadas por competição e depois por jogo (`_COMPETITION_LABELS` dá nome+emoji por `sport_key`, com
 fallback genérico pra competição sem entrada no dict — não trava se `SPORT_KEYS` ganhar uma competição
 nova). `send_daily_picks` recebe `games_today` (contagem de jogos de hoje considerados, não só os que
 viraram pick) pra diferenciar "sem jogos hoje" de "teve jogo mas sem valor" na mensagem — vem de
-`build_todays_picks`, que retorna `(picks, games_today)` em vez de só a lista de picks. Mensagem de picks
-termina com um rodapé fixo (`_EV_EXPLAINER`) explicando o que EV significa e avisando que EV muito alto pode
-ser erro de modelo — reforça o aviso que já está em "Modelo" acima, agora visível pro usuário final também.
+`build_todays_picks`, que retorna `(picks, games_today)` em vez de só a lista de picks. Também recebe
+`news_notes` opcional (`dict[match, aviso]`, de `main.py::_check_news`) — se o jogo tiver aviso, aparece
+logo abaixo do horário/confronto. Mensagem de picks termina com um rodapé fixo (`_EV_EXPLAINER`) explicando
+o que EV significa e avisando que EV muito alto pode ser erro de modelo — reforça o aviso que já está em
+"Modelo" acima, agora visível pro usuário final também.
 
 ### Armazenamento (`storage/picks_store.py`)
 
@@ -221,6 +256,9 @@ Bot 100% operacional de ponta a ponta, com todas as mudanças abaixo já testada
 - Mensagens do Telegram redesenhadas: agrupadas por competição e por jogo, mais emojis, rodapé explicando
   o que é EV.
 - Ponderação temporal no modelo (`half_life_days`) — reduz mas não elimina EVs artificialmente altos.
+- Checagem de notícias opcional via Claude + busca na web (`data/news_check.py`) — aviso informativo de
+  lesão/suspensão ao lado do pick, sem ajustar EV/probabilidade. Primeira dependência paga do projeto.
+- Telegram migrado de chat pessoal pra grupo (`TELEGRAM_CHAT_ID` negativo) — testado e confirmado.
 
 Pendências conhecidas (decisões conscientes, não bugs):
 - Teto de EV (`EV_MAX_THRESHOLD`) cogitado como segunda camada de segurança contra EVs artificialmente

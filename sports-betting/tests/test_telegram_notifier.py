@@ -57,6 +57,27 @@ def test_send_daily_picks_groups_multiple_selections_under_one_match(monkeypatch
     assert "08/09" in text  # data em formato br
 
 
+def test_send_daily_picks_shows_news_note_when_present(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate")]
+
+    TelegramNotifier("token", "chat").send_daily_picks(
+        "2026-09-08", picks, news_notes={"Flamengo x Corinthians": "Fulano é dúvida pro jogo."}
+    )
+
+    assert "⚠️" in sent["text"]
+    assert "Fulano é dúvida pro jogo." in sent["text"]
+
+
+def test_send_daily_picks_no_news_note_omits_warning_line(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate")]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert "⚠️" not in sent["text"]
+
+
 def test_send_daily_picks_no_games_today(monkeypatch):
     sent = _capture_sent_text(monkeypatch)
 

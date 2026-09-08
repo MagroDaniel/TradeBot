@@ -20,6 +20,7 @@ from alerts.telegram_notifier import TelegramNotifier
 from analysis.ev import calculate_ev
 from analysis.kelly import capped_stake
 from data.historical_loader import load_matches_from_csv
+from data.news_check import NewsChecker
 from data.odds_client import OddsAPIClient
 from data.schedule import is_same_day_brt, today_brt
 from data.team_aliases import normalize_team_name
@@ -205,6 +206,43 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
     return candidates
 
 
+# Nomes de competição sem emoji pro prompt da checagem de notícias (o de exibição no
+# Telegram, com emoji, fica em alerts/telegram_notifier.py — propositalmente separado).
+_COMPETITION_NAMES: dict[str, str] = {
+    "soccer_brazil_campeonato": "Brasileirão Série A",
+    "soccer_epl": "Premier League",
+    "soccer_spain_la_liga": "La Liga",
+    "soccer_germany_bundesliga": "Bundesliga",
+    "soccer_italy_serie_a": "Serie A italiana",
+    "soccer_france_ligue_one": "Ligue 1",
+    "soccer_uefa_champs_league": "Champions League",
+    "soccer_uefa_europa_league": "Europa League",
+    "soccer_uefa_europa_conference_league": "Conference League",
+}
+
+
+def _check_news(picks: list[Pick]) -> dict[str, str]:
+    """Checa notícias relevantes (lesões, suspensões) pros jogos de hoje que geraram pick —
+    um jogo só, mesmo que tenha vários picks. Puramente informativo (ver data/news_check.py).
+    Opcional: sem ANTHROPIC_API_KEY configurada, retorna vazio sem quebrar a execução."""
+    if not config.ANTHROPIC_API_KEY or not picks:
+        return {}
+
+    checker = NewsChecker(config.ANTHROPIC_API_KEY)
+    notes: dict[str, str] = {}
+    seen_matches: set[str] = set()
+    for p in picks:
+        if p.match in seen_matches:
+            continue
+        seen_matches.add(p.match)
+        sport_key = p.market.split(":", 1)[0]
+        competition = _COMPETITION_NAMES.get(sport_key, sport_key)
+        note = checker.check_match(p.home_team, p.away_team, competition)
+        if note:
+            notes[p.match] = note
+    return notes
+
+
 def _best_odds_by_selection(event: dict) -> dict[str, float]:
     """Melhor odd disponível entre as casas de apostas para cada seleção do evento."""
     home_team = event["home_team"]
@@ -263,7 +301,8 @@ def main() -> None:
     today = today_brt().isoformat()
     picks, games_today = build_todays_picks(client, models)
     store.save_picks(today, picks)
-    notifier.send_daily_picks(today, picks, games_today)
+    news_notes = _check_news(picks)
+    notifier.send_daily_picks(today, picks, games_today, news_notes)
 
 
 if __name__ == "__main__":

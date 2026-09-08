@@ -94,7 +94,13 @@ class TelegramNotifier:
         )
         self._send("\n".join(lines).rstrip())
 
-    def send_daily_picks(self, date: str, picks: list[Pick], games_today: int = 0) -> None:
+    def send_daily_picks(
+        self,
+        date: str,
+        picks: list[Pick],
+        games_today: int = 0,
+        news_notes: dict[str, str] | None = None,
+    ) -> None:
         display_date = format_date_br(date)
         if not picks:
             if games_today == 0:
@@ -116,6 +122,9 @@ class TelegramNotifier:
             lines.append(f"<b>{_competition_label(sport_key)}</b>")
             for (match, commence_time), match_picks in sorted(matches.items(), key=lambda kv: kv[0][1]):
                 lines.append(f"🕐 {format_time_brt(commence_time)} — {match}")
+                note = (news_notes or {}).get(match)
+                if note:
+                    lines.append(f"   ⚠️ <i>{note}</i>")
                 for p in match_picks:
                     sign = "+" if p.ev >= 0 else ""
                     lines.append(f"   🎯 {p.selection} — odd {p.odds:.2f}")

@@ -31,6 +31,11 @@ ODDS_API_KEYS: list[str] = [ODDS_API_KEY] + [
 ]
 TELEGRAM_BOT_TOKEN = _get_env("TELEGRAM_BOT_TOKEN", required=True)
 TELEGRAM_CHAT_ID = _get_env("TELEGRAM_CHAT_ID", required=True)
+# Opcional — habilita a checagem de notícias (lesões, suspensões) via Claude com busca na
+# web (ver data/news_check.py). Sem essa chave, o bot funciona normal, só sem esse aviso.
+# "" (string vazia) conta como não configurado — cobre o caso do secret existir vazio no
+# GitHub Actions (${{ secrets.X }} vira "" em vez de ausente quando o secret não existe).
+ANTHROPIC_API_KEY = _get_env("ANTHROPIC_API_KEY", default="").strip() or None
 
 # --- Esporte / mercado ---
 # Chaves de liga da The Odds API, separadas por vírgula (uma chamada = 1 crédito x região x

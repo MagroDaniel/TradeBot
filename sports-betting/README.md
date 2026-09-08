@@ -24,7 +24,12 @@ só analisa e alerta. A decisão e execução ficam com você.
    Se `(prob_modelo × odd) - 1` passar do limiar configurado, vira um "pick".
 5. **Stake** — sugere o tamanho da aposta via critério de Kelly fracionário
    (25% do Kelly cheio, por padrão), com um teto de segurança (3% da banca).
-6. **Telegram** — no dia seguinte, confere o placar dos jogos apostados e manda
+6. **Notícias (opcional)** — pros jogos que geraram pick, checa via Claude
+   (busca na web) se há lesão/suspensão/desfalque relevante e anexa um aviso
+   curto na mensagem. **Não muda o cálculo do EV nem da probabilidade** — é
+   só contexto pra você decidir na hora. Só ativa se `ANTHROPIC_API_KEY`
+   estiver configurada; sem ela, o bot funciona normal, sem esse aviso.
+7. **Telegram** — no dia seguinte, confere o placar dos jogos apostados e manda
    o resultado; na sequência, manda os novos picks do dia, agrupados por
    competição e por jogo.
 
@@ -85,6 +90,11 @@ cp .env.example .env
 - `TELEGRAM_CHAT_ID` — mande uma mensagem para o seu bot e acesse
   `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` para descobrir o
   `chat.id` (funciona também para grupos).
+- `ANTHROPIC_API_KEY` — **opcional**. Habilita a checagem de notícias (lesão/
+  suspensão) via Claude com busca na web. Pegue a sua em
+  [console.anthropic.com](https://console.anthropic.com/) — é a primeira
+  dependência paga do projeto (custo pequeno por execução, cobrado por uso).
+  Sem essa chave, o bot funciona normal, só sem esse aviso.
 
 ### 3. Dados históricos (para calibrar o modelo)
 
@@ -137,7 +147,8 @@ para persistir entre execuções (os runners do GitHub Actions são efêmeros).
 
 Para ativar:
 1. Vá em **Settings → Secrets and variables → Actions** no repositório.
-2. Adicione os secrets `ODDS_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+2. Adicione os secrets `ODDS_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+   (`ODDS_API_KEYS_EXTRA` e `ANTHROPIC_API_KEY` são opcionais — ver acima).
 3. Em **Settings → Actions → General → Workflow permissions**, marque
    "Read and write permissions" (necessário pro commit automático de volta).
 4. Pronto — o workflow já roda sozinho no horário configurado (ou dispare
