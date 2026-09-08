@@ -11,6 +11,7 @@ from collections import defaultdict
 
 import requests
 
+from analysis.multiple import Multiple
 from data.schedule import format_date_br, format_time_brt
 from storage.picks_store import Pick
 
@@ -37,6 +38,13 @@ _EV_EXPLAINER = (
     "do que deveria, se o modelo estiver certo. Quanto maior, mais \"de valor\" — mas EV muito "
     "alto (acima de 50%) também pode ser sinal de erro do modelo, não de oportunidade real. "
     "Revise antes de apostar.</i>"
+)
+
+_MULTIPLE_EXPLAINER = (
+    "⚠️ <i>Prioriza probabilidade, não valor — as pernas são as de maior chance do dia, mesmo "
+    "sem ser pick +EV. EV combinado costuma ser negativo (a casa cobra margem em cada perna) e "
+    "uma perna errada derruba o bilhete inteiro. Informativo, não entra no cálculo de stake do "
+    "bot — a decisão e o valor apostado são só seus.</i>"
 )
 
 
@@ -101,41 +109,65 @@ class TelegramNotifier:
         picks: list[Pick],
         games_today: int = 0,
         news_notes: dict[str, str] | None = None,
+        multiple: Multiple | None = None,
     ) -> None:
         display_date = format_date_br(date)
+        lines = [f"⚽ <b>Picks de hoje — {display_date}</b>"]
+
         if not picks:
             if games_today == 0:
-                msg = "😴 Sem jogos hoje nas competições acompanhadas."
+                lines.append("😴 Sem jogos hoje nas competições acompanhadas.")
             else:
-                msg = f"🔍 {games_today} jogo(s) hoje, nenhuma aposta de valor encontrada."
-            self._send(f"⚽ <b>Picks de hoje — {display_date}</b>\n{msg}")
-            return
+                lines.append(f"🔍 {games_today} jogo(s) hoje, nenhuma aposta de valor encontrada.")
+        else:
+            by_competition: dict[str, dict[tuple[str, str], list[Pick]]] = defaultdict(
+                lambda: defaultdict(list)
+            )
+            for p in picks:
+                sport_key = p.market.split(":", 1)[0]
+                by_competition[sport_key][(p.match, p.commence_time)].append(p)
 
-        by_competition: dict[str, dict[tuple[str, str], list[Pick]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
-        for p in picks:
-            sport_key = p.market.split(":", 1)[0]
-            by_competition[sport_key][(p.match, p.commence_time)].append(p)
-
-        lines = [f"⚽ <b>Picks de hoje — {display_date}</b>", "━━━━━━━━━━━━━━━", ""]
-        for sport_key, matches in by_competition.items():
-            lines.append(f"<b>{_competition_label(sport_key)}</b>")
-            for (match, commence_time), match_picks in sorted(matches.items(), key=lambda kv: kv[0][1]):
-                lines.append(f"🕐 {format_time_brt(commence_time)} — {match}")
-                note = (news_notes or {}).get(match)
-                if note:
-                    lines.append(f"   ⚠️ <i>{note}</i>")
-                for p in match_picks:
-                    sign = "+" if p.ev >= 0 else ""
-                    odd_label = f"odd {p.odds:.2f}" + (f" ({p.bookmaker})" if p.bookmaker else "")
-                    lines.append(f"   🎯 {p.selection} — {odd_label}")
-                    lines.append(f"   📈 EV {sign}{p.ev:.0%}  ·  💵 {p.suggested_stake_fraction:.1%} banca")
+            lines += ["━━━━━━━━━━━━━━━", ""]
+            for sport_key, matches in by_competition.items():
+                lines.append(f"<b>{_competition_label(sport_key)}</b>")
+                for (match, commence_time), match_picks in sorted(
+                    matches.items(), key=lambda kv: kv[0][1]
+                ):
+                    lines.append(f"🕐 {format_time_brt(commence_time)} — {match}")
+                    note = (news_notes or {}).get(match)
+                    if note:
+                        lines.append(f"   ⚠️ <i>{note}</i>")
+                    for p in match_picks:
+                        sign = "+" if p.ev >= 0 else ""
+                        odd_label = f"odd {p.odds:.2f}" + (f" ({p.bookmaker})" if p.bookmaker else "")
+                        lines.append(f"   🎯 {p.selection} — {odd_label}")
+                        lines.append(
+                            f"   📈 EV {sign}{p.ev:.0%}  ·  💵 {p.suggested_stake_fraction:.1%} banca"
+                        )
+                    lines.append("")
                 lines.append("")
-            lines.append("")
 
-        lines.append("━━━━━━━━━━━━━━━")
-        lines.append(f"<i>{len(picks)} pick(s) em {len(by_competition)} competição(ões) hoje</i>")
-        lines.append("")
-        lines.append(_EV_EXPLAINER)
+            lines.append("━━━━━━━━━━━━━━━")
+            lines.append(f"<i>{len(picks)} pick(s) em {len(by_competition)} competição(ões) hoje</i>")
+            lines.append("")
+            lines.append(_EV_EXPLAINER)
+
+        if multiple:
+            lines.append("")
+            lines.extend(self._format_multiple(multiple))
+
         self._send("\n".join(lines).rstrip())
+
+    def _format_multiple(self, multiple: Multiple) -> list[str]:
+        lines = ["━━━━━━━━━━━━━━━", "🎫 <b>Bilhete sugerido (múltipla)</b>", ""]
+        for i, leg in enumerate(multiple.legs, start=1):
+            bookmaker = f" ({leg.bookmaker})" if leg.bookmaker else ""
+            lines.append(f"{i}. {leg.match} — {leg.selection} — odd {leg.odds:.2f}{bookmaker}")
+        lines.append("")
+        sign = "+" if multiple.combined_ev >= 0 else ""
+        lines.append(f"💰 <b>Odd combinada:</b> {multiple.combined_odds:.2f}")
+        lines.append(f"🎲 <b>Probabilidade estimada:</b> {multiple.combined_probability:.0%}")
+        lines.append(f"📊 <b>EV combinado:</b> {sign}{multiple.combined_ev:.0%}")
+        lines.append("")
+        lines.append(_MULTIPLE_EXPLAINER)
+        return lines

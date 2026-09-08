@@ -29,9 +29,17 @@ só analisa e alerta. A decisão e execução ficam com você.
    curto na mensagem. **Não muda o cálculo do EV nem da probabilidade** — é
    só contexto pra você decidir na hora. Só ativa se `ANTHROPIC_API_KEY`
    estiver configurada; sem ela, o bot funciona normal, sem esse aviso.
-7. **Telegram** — no dia seguinte, confere o placar dos jogos apostados e manda
+7. **Bilhete de múltipla (opcional)** — sugere um bilhete combinando as
+   seleções de **maior probabilidade** do dia (uma por jogo, não
+   necessariamente as de maior EV) pra render uma odd combinada mais alta.
+   **Não é uma aposta de valor** — prioriza chance de bater, não EV, e o EV
+   combinado costuma ser negativo (a casa cobra margem em cada perna); a
+   mensagem deixa isso explícito. Puramente informativo, como a checagem de
+   notícias. Configurável via `MULTIPLE_LEGS` (padrão 4 pernas; `0`
+   desativa).
+8. **Telegram** — no dia seguinte, confere o placar dos jogos apostados e manda
    o resultado; na sequência, manda os novos picks do dia, agrupados por
-   competição e por jogo.
+   competição e por jogo, com o bilhete de múltipla sugerido ao final.
 
 ## Competições acompanhadas
 
@@ -169,7 +177,8 @@ sports-betting/
 │   └── poisson_model.py       # probabilidade de resultado via Poisson
 ├── analysis/
 │   ├── ev.py                  # probabilidade implícita / EV
-│   └── kelly.py                # sizing de stake (Kelly fracionário)
+│   ├── kelly.py                # sizing de stake (Kelly fracionário)
+│   └── multiple.py            # bilhete de múltipla sugerido (probabilidade, não EV)
 ├── storage/
 │   └── picks_store.py         # persistência simples em JSON
 ├── alerts/

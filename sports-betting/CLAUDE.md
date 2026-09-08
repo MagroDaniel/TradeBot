@@ -29,6 +29,12 @@ São escolhas de produto deliberadas, não descuidos — reabrir a discussão ex
   separados do feed de odds ao vivo (The Odds API) — as duas fontes nunca devem se fundir num único cliente.
 - **Armazenamento em JSON simples**, pensado para ser trocado por SQLite/Postgres só se o volume de
   histórico exigir — não "conserte" isso preventivamente.
+- **Bilhete de múltipla sugerido prioriza probabilidade, não EV** (`analysis/multiple.py`) — as pernas são
+  as de maior `model_probability` do dia, mesmo que não sejam picks +EV, e o bilhete pode ter EV combinado
+  negativo. Decisão explícita do usuário (opção recomendada apresentada) depois de eu levantar a alternativa
+  de combinar só picks já +EV — que na prática teria pernas insuficientes na maioria dos dias pra montar um
+  bilhete com odd relevante (o bot gera poucos picks +EV por dia). Puramente informativo, como a checagem de
+  notícias: não vira `Pick`, não é salvo em `storage/`, não entra em sizing de stake.
 
 ## Comandos
 
@@ -75,22 +81,48 @@ instância de `OddsAPIClient`:
 3. **`build_todays_picks()`** — para cada competição com modelo calibrado, busca as odds via
    `OddsAPIClient.get_upcoming_odds`, filtra só os jogos de **hoje em BRT**
    (`is_same_day_brt`), busca mercados adicionais por evento (`_with_additional_markets`, ver
-   "Fronteira de acesso a dados") e avalia cada evento.
+   "Fronteira de acesso a dados") e avalia cada evento, retornando `(picks, games_today, multiple)` — o
+   terceiro item é o bilhete de múltipla sugerido (ver "Bilhete de múltipla" abaixo).
 4. **`_check_news()`** — opcional (ver "Checagem de notícias" abaixo): checa lesão/suspensão pros jogos que
    geraram pick, um por partida.
 
-A avaliação por evento (`_evaluate_event`) é a lógica de decisão central e conecta os outros módulos:
-`PoissonModel.match_probabilities()` → compara com `_best_odds_by_selection()` (melhor preço entre as casas
-de apostas para cada uma das 10 seleções: vitória do mandante / empate / vitória do visitante / over 2.5 /
-under 2.5 / ambas marcam / ambas não marcam / dupla chance ×3) → `calculate_ev()` do `ev.py` → filtra por
-`config.EV_THRESHOLD` → `capped_stake()` do `kelly.py` para o sizing → filtra stake `> 0` → gera um `Pick`.
-`_best_odds_by_selection` devolve `(odd, casa)` por seleção, não só a odd — o `title` da casa (ex: "Bet365")
-vem junto no `Pick.bookmaker` e aparece na mensagem do Telegram entre parênteses ao lado da odd, já que
-casas diferentes pagam preços diferentes pra mesma seleção. Campo opcional (`None` em picks salvos antes
-dele existir, carregados via `Pick(**p)` — o default cobre isso sem migração de dado).
+A avaliação por evento é dividida em duas etapas (`main.py::SelectionCandidate` é o tipo intermediário
+compartilhado entre elas):
+`_selection_candidates()` chama `PoissonModel.match_probabilities()` → compara com
+`_best_odds_by_selection()` (melhor preço entre as casas de apostas para cada uma das 10 seleções: vitória
+do mandante / empate / vitória do visitante / over 2.5 / under 2.5 / ambas marcam / ambas não marcam / dupla
+chance ×3) → `calculate_ev()` do `ev.py`, sem aplicar nenhum filtro ainda. A partir dessa lista de
+candidatas, `_picks_from_candidates()` filtra por `config.EV_THRESHOLD` → `capped_stake()` do `kelly.py`
+para o sizing → filtra stake `> 0` → gera um `Pick` (é a lógica de decisão central do bot, sem mudança de
+comportamento desde antes do bilhete de múltipla existir); `_best_leg_for_multiple()` pega da mesma lista a
+seleção de **maior `model_probability`** do evento (ignorando EV) pra alimentar o bilhete de múltipla — ver
+abaixo. `_best_odds_by_selection` devolve `(odd, casa)` por seleção, não só a odd — o `title` da casa (ex:
+"Bet365") vem junto no `Pick.bookmaker` e aparece na mensagem do Telegram entre parênteses ao lado da odd,
+já que casas diferentes pagam preços diferentes pra mesma seleção. Campo opcional (`None` em picks salvos
+antes dele existir, carregados via `Pick(**p)` — o default cobre isso sem migração de dado).
 
 Os resultados são enviados ao Telegram nesta ordem fixa (resultados de ontem, depois picks de hoje) — é uma
 decisão de produto deliberada, não incidental; preserve essa ordem se mexer no `main()`.
+
+### Bilhete de múltipla (`analysis/multiple.py`)
+
+Seção opcional (`config.MULTIPLE_LEGS`, padrão 4, `0` desativa) na mesma mensagem diária de picks — **não**
+uma mensagem separada. Diferente do resto do pipeline, prioriza `model_probability` em vez de EV: pra cada
+jogo de hoje, `main.py::_best_leg_for_multiple` pega a seleção de maior probabilidade (mesmo sem ser pick
++EV); `build_multiple()` pega as `MULTIPLE_LEGS` pernas de maior probabilidade entre todos os jogos do dia
+(uma por jogo — nunca duas seleções do mesmo jogo, o que violaria a independência assumida no produto de
+odds/probabilidades) e multiplica odds e probabilidades. Retorna `None` (a seção some da mensagem) se não
+houver jogos suficientes hoje pra preencher `MULTIPLE_LEGS` — não sugere bilhete "incompleto".
+
+Isso foi uma decisão explícita do usuário depois de eu apresentar a alternativa de combinar só picks já
++EV: na prática o bot gera poucos picks +EV por dia (às vezes 0), então quase nunca haveria pernas
+suficientes pra um bilhete com odd relevante. **Puramente informativo, como a checagem de notícias**: não
+vira `Pick`, não é salvo em `storage/`, não entra em `resolve_yesterday` (não é conferido/resolvido depois)
+nem em nenhum sizing de stake — a mensagem mostra o EV combinado só como contexto (`combined_ev`, pode e
+costuma ser negativo, já que a casa cobra margem em cada perna e o produto dessas margens cresce rápido) e
+avisa isso explicitamente (`_MULTIPLE_EXPLAINER` em `alerts/telegram_notifier.py`). Aparece mesmo em dias
+sem nenhum pick +EV, desde que haja jogos suficientes — é uma feature independente do funil de EV, não uma
+extensão dele.
 
 ### Modelo (`model/poisson_model.py`)
 

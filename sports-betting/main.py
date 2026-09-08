@@ -12,6 +12,7 @@ mesmo que a Odds API devolva jogos de dias futuros também.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 
@@ -19,6 +20,7 @@ import config
 from alerts.telegram_notifier import TelegramNotifier
 from analysis.ev import calculate_ev
 from analysis.kelly import capped_stake
+from analysis.multiple import Multiple, MultipleLeg, build_multiple
 from data.historical_loader import load_matches_from_csv
 from data.news_check import NewsChecker
 from data.odds_client import OddsAPIClient
@@ -105,12 +107,16 @@ def _load_models(sport_keys: list[str]) -> dict[str, PoissonModel]:
     return models
 
 
-def build_todays_picks(client: OddsAPIClient, models: dict[str, PoissonModel]) -> tuple[list[Pick], int]:
-    """Retorna os picks de hoje e o total de jogos de hoje considerados (mesmo os que não
+def build_todays_picks(
+    client: OddsAPIClient, models: dict[str, PoissonModel]
+) -> tuple[list[Pick], int, Multiple | None]:
+    """Retorna os picks de hoje, o total de jogos de hoje considerados (mesmo os que não
     viraram pick) — usado pra distinguir "sem jogos hoje" de "jogos hoje sem valor" na
-    mensagem do Telegram."""
+    mensagem do Telegram — e o bilhete de múltipla sugerido (ver analysis/multiple.py),
+    `None` se não houver jogos suficientes pra preencher `config.MULTIPLE_LEGS`."""
     picks: list[Pick] = []
     games_today = 0
+    multiple_legs: list[MultipleLeg] = []
     today = today_brt()
 
     for sport_key, model in models.items():
@@ -125,9 +131,14 @@ def build_todays_picks(client: OddsAPIClient, models: dict[str, PoissonModel]) -
                 continue  # só jogos de hoje (BRT) — a Odds API também devolve jogos futuros
             games_today += 1
             event = _with_additional_markets(client, event, sport_key)
-            picks.extend(_evaluate_event(event, model, sport_key))
+            candidates = _selection_candidates(event, model)
+            picks.extend(_picks_from_candidates(event, candidates, sport_key))
+            leg = _best_leg_for_multiple(event, candidates)
+            if leg:
+                multiple_legs.append(leg)
 
-    return picks, games_today
+    multiple = build_multiple(multiple_legs, config.MULTIPLE_LEGS)
+    return picks, games_today, multiple
 
 
 def _with_additional_markets(client: OddsAPIClient, event: dict, sport_key: str) -> dict:
@@ -147,7 +158,22 @@ def _with_additional_markets(client: OddsAPIClient, event: dict, sport_key: str)
     return {**event, "bookmakers": event.get("bookmakers", []) + extra.get("bookmakers", [])}
 
 
-def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pick]:
+@dataclass
+class SelectionCandidate:
+    """Uma seleção avaliada de um evento, antes do filtro de EV — base tanto pros picks +EV
+    (`_picks_from_candidates`) quanto pra perna do bilhete de múltipla (`_best_leg_for_multiple`,
+    que ordena por `model_probability` em vez de `ev`)."""
+    selection: str
+    odds: float
+    bookmaker: str
+    model_probability: float
+    ev: float
+
+
+def _selection_candidates(event: dict, model: PoissonModel) -> list[SelectionCandidate]:
+    """Avalia as 10 seleções do evento (vitória do mandante/empate/vitória do visitante/
+    over-under 2.5/ambas marcam/dupla chance ×3) contra a melhor odd disponível, sem aplicar
+    o filtro de EV — quem chama decide o que fazer com cada candidata."""
     home_team = event["home_team"]
     away_team = event["away_team"]
 
@@ -173,22 +199,43 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
         f"{home_team} ou {away_team}": probs["double_chance_home_or_away"],
     }
 
-    candidates: list[Pick] = []
+    candidates: list[SelectionCandidate] = []
     for selection, model_prob in selection_prob_map.items():
         best = best_odds.get(selection)
         if best is None:
             continue
         odds, bookmaker = best
+        candidates.append(
+            SelectionCandidate(
+                selection=selection,
+                odds=odds,
+                bookmaker=bookmaker,
+                model_probability=model_prob,
+                ev=calculate_ev(model_prob, odds),
+            )
+        )
+    return candidates
 
-        ev = calculate_ev(model_prob, odds)
-        if ev < config.EV_THRESHOLD:
+
+def _picks_from_candidates(
+    event: dict, candidates: list[SelectionCandidate], sport_key: str
+) -> list[Pick]:
+    """Filtra as candidatas por `config.EV_THRESHOLD` e monta um `Pick` (com sizing de Kelly)
+    pras que passam — a lógica de decisão central do bot, inalterada desde antes do bilhete de
+    múltipla existir."""
+    home_team = event["home_team"]
+    away_team = event["away_team"]
+
+    picks: list[Pick] = []
+    for c in candidates:
+        if c.ev < config.EV_THRESHOLD:
             continue
 
-        stake = capped_stake(model_prob, odds, config.KELLY_FRACTION, config.MAX_STAKE_FRACTION)
+        stake = capped_stake(c.model_probability, c.odds, config.KELLY_FRACTION, config.MAX_STAKE_FRACTION)
         if stake <= 0:
             continue
 
-        candidates.append(
+        picks.append(
             Pick(
                 event_id=event["id"],
                 match=f"{home_team} x {away_team}",
@@ -196,16 +243,31 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
                 away_team=away_team,
                 commence_time=event["commence_time"],
                 market=f"{sport_key}:1x2/totals",
-                selection=selection,
-                odds=odds,
-                model_probability=model_prob,
-                ev=ev,
+                selection=c.selection,
+                odds=c.odds,
+                model_probability=c.model_probability,
+                ev=c.ev,
                 suggested_stake_fraction=stake,
-                bookmaker=bookmaker,
+                bookmaker=c.bookmaker,
             )
         )
+    return picks
 
-    return candidates
+
+def _best_leg_for_multiple(event: dict, candidates: list[SelectionCandidate]) -> MultipleLeg | None:
+    """Perna candidata ao bilhete de múltipla: a seleção de MAIOR PROBABILIDADE do jogo (não a
+    de maior EV — ver analysis/multiple.py). Uma perna por jogo; `build_multiple` escolhe depois
+    as N de maior probabilidade entre as pernas de TODOS os jogos do dia."""
+    if not candidates:
+        return None
+    best = max(candidates, key=lambda c: c.model_probability)
+    return MultipleLeg(
+        match=f"{event['home_team']} x {event['away_team']}",
+        selection=best.selection,
+        odds=best.odds,
+        bookmaker=best.bookmaker,
+        model_probability=best.model_probability,
+    )
 
 
 # Nomes de competição sem emoji pro prompt da checagem de notícias (o de exibição no
@@ -304,10 +366,10 @@ def main() -> None:
     models = _load_models(sport_keys)
 
     today = today_brt().isoformat()
-    picks, games_today = build_todays_picks(client, models)
+    picks, games_today, multiple = build_todays_picks(client, models)
     store.save_picks(today, picks)
     news_notes = _check_news(picks)
-    notifier.send_daily_picks(today, picks, games_today, news_notes)
+    notifier.send_daily_picks(today, picks, games_today, news_notes, multiple)
 
 
 if __name__ == "__main__":
