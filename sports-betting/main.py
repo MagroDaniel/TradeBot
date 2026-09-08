@@ -15,6 +15,7 @@ from analysis.ev import calculate_ev
 from analysis.kelly import capped_stake
 from data.historical_loader import load_matches_from_csv
 from data.odds_client import OddsAPIClient
+from data.team_aliases import normalize_team_name
 from model.poisson_model import PoissonModel
 from storage.picks_store import Pick, PicksStore
 
@@ -100,7 +101,9 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
     away_team = event["away_team"]
 
     try:
-        probs = model.match_probabilities(home_team, away_team)
+        probs = model.match_probabilities(
+            normalize_team_name(home_team), normalize_team_name(away_team)
+        )
     except KeyError:
         logger.warning("Sem histórico calibrado para %s x %s — pulando", home_team, away_team)
         return []
@@ -190,7 +193,7 @@ def main() -> None:
     resolve_yesterday(client, store, notifier)
 
     # 2) depois, os picks de hoje
-    model = PoissonModel()
+    model = PoissonModel(half_life_days=config.MODEL_HALF_LIFE_DAYS)
     historical_matches = load_matches_from_csv(config.HISTORICAL_DATA_PATH)
     model.fit(historical_matches)
 

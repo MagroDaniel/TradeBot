@@ -54,10 +54,18 @@ cp .env.example .env
 
 ### 3. Dados históricos (para calibrar o modelo)
 
-Baixe o CSV da liga desejada em
-[football-data.co.uk/data.php](https://www.football-data.co.uk/data.php)
-(gratuito, sem precisar de chave de API). O arquivo já vem com as colunas
-`HomeTeam`, `AwayTeam`, `FTHG`, `FTAG` que o `historical_loader.py` espera.
+O `historical_loader.py` reconhece automaticamente duas fontes gratuitas (nenhuma
+exige chave de API), pelo formato das colunas do CSV:
+
+- **Brasileirão** (`SPORT_KEYS` padrão, `soccer_brazil_campeonato`) — o
+  [football-data.co.uk](https://www.football-data.co.uk/data.php) **não cobre
+  o Brasileirão** (só ligas europeias), então use o
+  [adaoduque/Brasileirao_Dataset](https://github.com/adaoduque/Brasileirao_Dataset)
+  (2003-2024). Baixe `campeonato-brasileiro-full.csv` — colunas `mandante`,
+  `visitante`, `mandante_Placar`, `visitante_Placar`.
+- **Ligas europeias** (se você trocar `SPORT_KEYS`, ex: `soccer_epl`) — baixe o
+  CSV da liga em [football-data.co.uk/data.php](https://www.football-data.co.uk/data.php)
+  (colunas `HomeTeam`, `AwayTeam`, `FTHG`, `FTAG`).
 
 Salve o CSV em `data/historical/brasileirao.csv` (ou aponte
 `HISTORICAL_DATA_PATH` no `.env` para outro caminho/liga). Dica: junte 2-3
