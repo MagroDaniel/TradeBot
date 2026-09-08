@@ -191,6 +191,33 @@ qual gatilho disparou cada run. Se o cron-job.org sair do ar, o bot simplesmente
 automaticamente até o serviço voltar ou até alguém disparar manualmente pela aba Actions — não há
 fallback nativo do GitHub configurado.
 
+**Binance bloqueia (HTTP 451) requisição vinda dos runners do GitHub Actions (descoberto 2026-09-08)**:
+depois de corrigir o problema do `schedule` acima, o usuário reportou não ter recebido nenhuma mensagem no
+Telegram o dia todo mesmo com o Actions rodando. Baixei os logs reais de todos os runs (inclusive o #1, o
+primeiro que existiu) via `GET /repos/MagroDaniel/TradeBot/actions/runs/{id}/logs` — **toda** chamada às
+rotas `/api/v3/*` da Binance falhava com `HTTPError: 451 Client Error` (`Unavailable For Legal Reasons`),
+desde a primeira execução. `main.py` captura essa exceção por símbolo (`try/except` + `logger.error`) e
+segue em frente, então o run terminava com `conclusion: success` mesmo sem conseguir buscar um único
+candle — por isso `storage/signals.json` não mudou desde o commit `d9a20c1` (teste local do usuário, do
+Brasil) apesar de 15 runs "bem-sucedidos". Causa: os runners `ubuntu-latest` do GitHub Actions rodam em
+datacenter da Microsoft Azure nos **EUA**, e a Binance devolve 451 pra qualquer requisição de lá (mesma
+restrição regulatória que já explica a Binance.US existir como exchange separada) — nada a ver com o bug
+do `schedule` acima, que só afetava a frequência, não a origem da chamada.
+
+**Solução adotada**: `binance-proxy/` (novo diretório na raiz do repo `TradeBot`, irmão de
+`crypto-daytrade/`) — uma Vercel Function (`api/v3/[...path].js`) fixada na região `gru1` (São Paulo) via
+`vercel.json`, que só repassa `GET /api/v3/*` pra `api.binance.com` e devolve a resposta como veio (sem
+autenticação própria — a API de mercado da Binance usada aqui é pública e só leitura, não tem credencial
+passando pelo proxy). `data/binance_client.py::BASE_URL` agora lê `BINANCE_API_BASE_URL` de
+`os.getenv` (não de `config.py` — de propósito, pra não introduzir dependência de credencial do Telegram
+nesse módulo e manter a suíte de testes rodando sem `.env`) com fallback pro endpoint oficial da Binance;
+localmente (Brasil) essa variável fica vazia e continua batendo direto na Binance. O workflow
+(`crypto_daytrade.yml`) passa `BINANCE_API_BASE_URL: ${{ secrets.CRYPTO_BINANCE_PROXY_URL }}` — enquanto
+esse secret não existir, o Actions volta a tomar 451 (mesmo comportamento de antes, não piora nada). Ver
+`binance-proxy/README.md` pros passos de deploy (import do repo na Vercel, root directory `binance-proxy`)
+e cadastro do secret. **Ainda pendente**: usuário precisa fazer esse deploy e cadastrar
+`CRYPTO_BINANCE_PROXY_URL` — sem isso, o bot continua sem gerar/resolver sinal nenhum via Actions.
+
 ## Status atual
 
 Reescrito do zero em 2026-09-08 (pivô de "listagens novas" pra "sinais técnicos"), testado de ponta a ponta

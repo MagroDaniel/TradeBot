@@ -4,11 +4,20 @@ pra calcular os indicadores técnicos.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import requests
 
-BASE_URL = "https://api.binance.com/api/v3"
+# Lido direto de os.getenv (não de config.py) de propósito — config.py levanta RuntimeError na
+# importação se faltar credencial do Telegram, e este módulo precisa continuar importável sem
+# nenhuma credencial pra suíte de testes rodar sem .env (ver CLAUDE.md, seção "Comandos").
+#
+# BINANCE_API_BASE_URL normalmente fica vazia (usa a Binance direto) — só é setada no GitHub
+# Actions, apontando pro binance-proxy/ (ver README daquele diretório): a Binance devolve HTTP
+# 451 pra requisições vindas de infraestrutura dos EUA, onde o runner do Actions roda, então lá
+# a chamada precisa passar por um proxy fora dos EUA. Localmente (Brasil) isso não é necessário.
+BASE_URL = os.getenv("BINANCE_API_BASE_URL", "https://api.binance.com/api/v3")
 
 # Stablecoins pareadas com USDT (ex: USDCUSDT) têm volume alto mas preço travado em ~1.00 —
 # nunca geram cruzamento de médias de verdade, só desperdiçam uma chamada de klines por

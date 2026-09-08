@@ -31,6 +31,11 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.CRYPTO_TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.CRYPTO_TELEGRAM_CHAT_ID }}
+          # Runner do Actions roda em datacenter dos EUA -> Binance devolve 451 pra chamada
+          # direta (descoberto em 2026-09-08). CRYPTO_BINANCE_PROXY_URL aponta pro
+          # binance-proxy/ (fora dos EUA); enquanto o secret não existir, BASE_URL cai no
+          # default (Binance direta) e volta a tomar 451 — ver README de binance-proxy/.
+          BINANCE_API_BASE_URL: ${{ secrets.CRYPTO_BINANCE_PROXY_URL }}
         run: python main.py
 
       - name: Salvar histórico de sinais
