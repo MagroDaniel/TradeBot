@@ -20,6 +20,15 @@ não tem chave de API nem segredo passando por aqui, então não tem credencial 
 que a URL do proxy seja descoberta por terceiros (o único risco de deixar a URL pública é
 alguém consumir a cota de execuções da Vercel, não vazamento de dado).
 
+**Detalhe de implementação**: quem chama bate em `/api/v3/<endpoint>` normalmente (ex:
+`/api/v3/klines?symbol=BTCUSDT`), igual bateria direto na Binance. Por baixo, um `rewrite` em
+`vercel.json` redireciona isso pra uma function fixa (`api/proxy.js`) — **não** existe um
+arquivo `api/v3/[...path].js` de propósito: testamos e o catch-all "`...`" do Next.js não é
+honrado em projeto zero-config sem framework (preset "Other"), só casa exatamente 1 segmento de
+path (`/api/v3/ping` funcionava, `/api/v3/ticker/price` dava 404 puro do roteador da Vercel,
+antes mesmo de chegar na function). O `rewrite` explícito é a forma confiável de capturar path
+de profundidade variável nesse tipo de projeto.
+
 ## Deploy (uma vez só)
 
 1. Crie conta em https://vercel.com (dá pra logar direto com a conta do GitHub).

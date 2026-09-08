@@ -6,16 +6,22 @@
 // 2026-09-08 (ver CLAUDE.md do crypto-daytrade, seção "Automação").
 //
 // Fixado na região gru1 (São Paulo) via vercel.json — fora dos EUA, então a Binance atende
-// normalmente. Só repassa GET (a API pública de mercado é só leitura; não tem chave/segredo
-// aqui pra vazar, então não faz sentido aceitar outros métodos).
+// normalmente. Quem chama bate em /api/v3/<endpoint> (ex: /api/v3/klines?symbol=...) igual
+// bateria direto na Binance; o rewrite em vercel.json redireciona isso pra cá, colocando o
+// pedaço de path capturado no query param `slug` (não existe rota de arquivo tipo
+// api/v3/[...path].js aqui de propósito — testado e o catch-all "..." do Next.js não é
+// honrado em projeto zero-config sem framework, só casa 1 segmento; rewrite explícito é a
+// forma confiável de capturar path de profundidade variável nesse tipo de projeto).
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.status(405).json({ error: "method_not_allowed" });
     return;
   }
 
-  const suffix = req.url.replace(/^\/api\/v3/, "");
-  const upstream = `https://api.binance.com/api/v3${suffix}`;
+  const { slug, ...rest } = req.query;
+  const path = Array.isArray(slug) ? slug.join("/") : slug || "";
+  const qs = new URLSearchParams(rest).toString();
+  const upstream = `https://api.binance.com/api/v3/${path}${qs ? `?${qs}` : ""}`;
 
   try {
     const upstreamRes = await fetch(upstream, {
