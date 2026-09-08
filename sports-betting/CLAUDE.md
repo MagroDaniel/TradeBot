@@ -134,33 +134,32 @@ remote é `MagroDaniel/TradeBot`) — não é a raiz. `.github/workflows/daily_p
 (`TradeBot/.github/...`), não dentro de `sports-betting/.github/...`; procure lá se for mexer nele. O
 workflow já existe e roda: cron diário (11h UTC = 08h BRT) + `workflow_dispatch` (disparo manual),
 `working-directory: sports-betting`, instala dependências, roda `python main.py` com as 3 credenciais como
-secrets, e commita+pusha `storage/picks.json` de volta (runners são efêmeros). Falta só os secrets serem
-configurados no GitHub (Settings → Secrets and variables → Actions) — o workflow em si está pronto.
+secrets, e commita+pusha `storage/picks.json` de volta (runners são efêmeros). Os 3 secrets estão
+configurados no GitHub e um run manual (`workflow_dispatch`) já confirmou o pipeline de ponta a ponta —
+commit automático de `github-actions[bot]` no repo e mensagens reais recebidas no Telegram. Repo requer
+"Read and write permissions" em Settings → Actions → General → Workflow permissions (senão o `git push`
+final do job falha) — já habilitado. **Nota**: se um workflow novo/editado não aparecer na aba Actions
+mesmo estando no branch padrão, é só falta de reindexação do GitHub — basta um novo push tocando o arquivo
+do workflow pra ele aparecer (aconteceu uma vez neste repo).
 
 ## Status atual
 
-Já feito:
+Bot 100% operacional de ponta a ponta — checklist inicial de setup concluído:
 
-- `.env` criado e as 3 credenciais validadas com um teste real (`ODDS_API_KEY` retornou eventos de
-  `soccer_brazil_campeonato`; Telegram confirmou o envio de uma mensagem de teste).
-- Ambiente local pronto: `.venv/` criado, dependências de `requirements.txt` instaladas, `pytest` passando
-  (26/26).
-- CSV histórico baixado (`adaoduque/Brasileirao_Dataset`, 2003-2024, 8785 partidas) em
-  `data/historical/brasileirao.csv`. README corrigido — football-data.co.uk não cobre o Brasileirão.
+- `.env` local criado e testado; ambiente (`.venv/`) pronto; `pytest` passando (26/26).
+- CSV histórico correto baixado (`adaoduque/Brasileirao_Dataset`, 2003-2024, 8785 partidas) — README
+  corrigido, já que football-data.co.uk (fonte original citada) não cobre o Brasileirão.
 - Nomes de times conferidos contra a Odds API real e mapeados em `data/team_aliases.py` (6 aliases; 2 times
-  — Mirassol, Remo — seguem sem histórico por serem recém-promovidos, não têm solução via alias).
+  — Mirassol, Remo — seguem sem histórico por serem recém-promovidos, sem solução possível via alias).
 - Ponderação temporal implementada no `PoissonModel` (`half_life_days`) depois de detectar EVs
   artificialmente altos (>100%) no primeiro run real — ver "Modelo" acima pra limitação remanescente.
-- `python main.py` rodado de ponta a ponta com dados reais mais de uma vez (picks salvos em
-  `storage/picks.json`, mensagens confirmadas no Telegram).
+- `python main.py` rodado de ponta a ponta localmente várias vezes, e via GitHub Actions (`workflow_dispatch`)
+  com sucesso confirmado — secrets configurados, commit automático de volta funcionando, Telegram recebendo.
 
-Ainda falta:
-
-- Configurar os 3 secrets no GitHub (Settings → Secrets and variables → Actions: `ODDS_API_KEY`,
-  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) — o workflow (`TradeBot/.github/workflows/daily_picks.yml`, na
-  raiz do repo) já existe e está pronto, só falta isso. **Próximo passo.**
-- Considerado e adiado por decisão do usuário: um teto de EV (`EV_MAX_THRESHOLD`) como segunda camada de
-  segurança contra os EVs ainda artificialmente altos em alguns picks — não implementado por ora.
+Pendência conhecida (decisão consciente, não bug): considerado e adiado por decisão do usuário um teto de
+EV (`EV_MAX_THRESHOLD`) como segunda camada de segurança contra os EVs ainda artificialmente altos em
+alguns picks (mesmo após a ponderação temporal) — não implementado por ora, usuário prefere revisar
+manualmente antes de apostar.
 
 ## Projeto irmão (ainda não iniciado)
 
