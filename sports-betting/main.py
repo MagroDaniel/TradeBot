@@ -1,13 +1,19 @@
 """Orquestração diária do bot: resolve os resultados de ontem e envia os picks de hoje.
 
-Pensado para rodar 1x por dia (ex: 8h da manhã) via cron / GitHub Actions.
+Pensado para rodar 1x por dia (7h da manhã, BRT) via cron / GitHub Actions.
 Ordem de execução: resultados de ontem primeiro, depois picks de hoje —
 exatamente como decidido para o envio no Telegram.
+
+Cada competição em SPORT_KEYS tem seu próprio modelo, calibrado com o CSV histórico
+correspondente (times/médias de gols de ligas diferentes não podem compartilhar um modelo) —
+ver `_load_models`. Só entram picks de jogos que acontecem hoje em BRT (ver `data/schedule.py`),
+mesmo que a Odds API devolva jogos de dias futuros também.
 """
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
+from pathlib import Path
 
 import config
 from alerts.telegram_notifier import TelegramNotifier
@@ -15,6 +21,7 @@ from analysis.ev import calculate_ev
 from analysis.kelly import capped_stake
 from data.historical_loader import load_matches_from_csv
 from data.odds_client import OddsAPIClient
+from data.schedule import is_same_day_brt, today_brt
 from data.team_aliases import normalize_team_name
 from model.poisson_model import PoissonModel
 from storage.picks_store import Pick, PicksStore
@@ -24,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_yesterday(client: OddsAPIClient, store: PicksStore, notifier: TelegramNotifier) -> None:
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (today_brt() - timedelta(days=1)).isoformat()
     picks = store.load_picks(yesterday)
     if not picks:
         logger.info("Nenhum pick registrado para %s", yesterday)
@@ -79,11 +86,33 @@ def _pick_won(pick: Pick, event: dict) -> bool:
     return False
 
 
-def build_todays_picks(client: OddsAPIClient, model: PoissonModel) -> list[Pick]:
-    picks: list[Pick] = []
-    sport_keys = [s.strip() for s in config.SPORT_KEYS.split(",") if s.strip()]
-
+def _load_models(sport_keys: list[str]) -> dict[str, PoissonModel]:
+    """Calibra um PoissonModel por competição, a partir de
+    HISTORICAL_DATA_DIR/{sport_key}.csv. Competição sem CSV correspondente é pulada
+    (log de aviso) em vez de derrubar a execução das demais."""
+    models: dict[str, PoissonModel] = {}
     for sport_key in sport_keys:
+        path = Path(config.HISTORICAL_DATA_DIR) / f"{sport_key}.csv"
+        if not path.exists():
+            logger.warning("Sem CSV histórico para %s (%s) — pulando competição", sport_key, path)
+            continue
+        matches = load_matches_from_csv(path)
+        if not matches:
+            logger.warning("CSV histórico vazio para %s (%s) — pulando competição", sport_key, path)
+            continue
+        models[sport_key] = PoissonModel(half_life_days=config.MODEL_HALF_LIFE_DAYS).fit(matches)
+    return models
+
+
+def build_todays_picks(client: OddsAPIClient, models: dict[str, PoissonModel]) -> tuple[list[Pick], int]:
+    """Retorna os picks de hoje e o total de jogos de hoje considerados (mesmo os que não
+    viraram pick) — usado pra distinguir "sem jogos hoje" de "jogos hoje sem valor" na
+    mensagem do Telegram."""
+    picks: list[Pick] = []
+    games_today = 0
+    today = today_brt()
+
+    for sport_key, model in models.items():
         try:
             events = client.get_upcoming_odds(sport_key)
         except Exception:
@@ -91,9 +120,30 @@ def build_todays_picks(client: OddsAPIClient, model: PoissonModel) -> list[Pick]
             continue
 
         for event in events:
+            if not is_same_day_brt(event["commence_time"], today):
+                continue  # só jogos de hoje (BRT) — a Odds API também devolve jogos futuros
+            games_today += 1
+            event = _with_additional_markets(client, event, sport_key)
             picks.extend(_evaluate_event(event, model, sport_key))
 
-    return picks
+    return picks, games_today
+
+
+def _with_additional_markets(client: OddsAPIClient, event: dict, sport_key: str) -> dict:
+    """Busca mercados adicionais (ambas marcam, dupla chance) pro evento e mescla com os
+    bookmakers já trazidos pela chamada em lote (h2h/totals). Cobrado por evento — só chamado
+    pra jogos que já passaram no filtro de hoje, não pra todos os jogos futuros da liga."""
+    if not config.ADDITIONAL_MARKETS:
+        return event
+    try:
+        extra = client.get_event_odds(sport_key, event["id"], config.ADDITIONAL_MARKETS)
+    except Exception:
+        logger.exception(
+            "Falha ao buscar mercados adicionais para %s x %s",
+            event["home_team"], event["away_team"],
+        )
+        return event
+    return {**event, "bookmakers": event.get("bookmakers", []) + extra.get("bookmakers", [])}
 
 
 def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pick]:
@@ -115,6 +165,11 @@ def _evaluate_event(event: dict, model: PoissonModel, sport_key: str) -> list[Pi
         f"{away_team} vence": probs["away_win"],
         "Over 2.5 gols": probs["over_2_5"],
         "Under 2.5 gols": probs["under_2_5"],
+        "Ambas marcam": probs["btts_yes"],
+        "Ambas não marcam": probs["btts_no"],
+        f"{home_team} ou empate": probs["double_chance_home_or_draw"],
+        f"{away_team} ou empate": probs["double_chance_away_or_draw"],
+        f"{home_team} ou {away_team}": probs["double_chance_home_or_away"],
     }
 
     candidates: list[Pick] = []
@@ -171,6 +226,15 @@ def _best_odds_by_selection(event: dict) -> dict[str, float]:
                         selection = "Empate"
                 elif market["key"] == "totals" and outcome.get("point") == 2.5:
                     selection = "Over 2.5 gols" if name == "Over" else "Under 2.5 gols"
+                elif market["key"] == "btts":
+                    selection = "Ambas marcam" if name == "Yes" else "Ambas não marcam"
+                elif market["key"] == "double_chance":
+                    if name == f"{home_team} or Draw":
+                        selection = f"{home_team} ou empate"
+                    elif name == f"{away_team} or Draw":
+                        selection = f"{away_team} ou empate"
+                    else:
+                        selection = f"{home_team} ou {away_team}"
                 else:
                     continue
 
@@ -182,7 +246,7 @@ def _best_odds_by_selection(event: dict) -> dict[str, float]:
 
 def main() -> None:
     client = OddsAPIClient(
-        api_key=config.ODDS_API_KEY,
+        api_keys=config.ODDS_API_KEYS,
         regions=config.REGIONS,
         markets=config.MARKETS,
     )
@@ -193,14 +257,13 @@ def main() -> None:
     resolve_yesterday(client, store, notifier)
 
     # 2) depois, os picks de hoje
-    model = PoissonModel(half_life_days=config.MODEL_HALF_LIFE_DAYS)
-    historical_matches = load_matches_from_csv(config.HISTORICAL_DATA_PATH)
-    model.fit(historical_matches)
+    sport_keys = [s.strip() for s in config.SPORT_KEYS.split(",") if s.strip()]
+    models = _load_models(sport_keys)
 
-    today = date.today().isoformat()
-    picks = build_todays_picks(client, model)
+    today = today_brt().isoformat()
+    picks, games_today = build_todays_picks(client, models)
     store.save_picks(today, picks)
-    notifier.send_daily_picks(today, picks)
+    notifier.send_daily_picks(today, picks, games_today)
 
 
 if __name__ == "__main__":

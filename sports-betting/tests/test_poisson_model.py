@@ -41,6 +41,18 @@ def test_unknown_team_raises(fitted_model):
         fitted_model.match_probabilities("Time A", "Time Desconhecido")
 
 
+def test_btts_probabilities_sum_to_one(fitted_model):
+    probs = fitted_model.match_probabilities("Time A", "Time B")
+    assert probs["btts_yes"] + probs["btts_no"] == pytest.approx(1.0)
+
+
+def test_double_chance_matches_sum_of_underlying_outcomes(fitted_model):
+    probs = fitted_model.match_probabilities("Time A", "Time B")
+    assert probs["double_chance_home_or_draw"] == pytest.approx(probs["home_win"] + probs["draw"])
+    assert probs["double_chance_away_or_draw"] == pytest.approx(probs["away_win"] + probs["draw"])
+    assert probs["double_chance_home_or_away"] == pytest.approx(probs["home_win"] + probs["away_win"])
+
+
 def test_matches_without_date_are_unweighted():
     # Sem match_date, a ponderação temporal não tem o que fazer — deve se comportar
     # exatamente como o modelo sem ponderação (half_life_days=None).

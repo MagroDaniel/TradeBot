@@ -124,11 +124,14 @@ class PoissonModel:
         return home_xg, away_xg
 
     def match_probabilities(self, home_team: str, away_team: str) -> dict[str, float]:
-        """Probabilidades de resultado 1X2 e over/under 2.5 gols."""
+        """Probabilidades de resultado 1X2, over/under 2.5 gols, ambas marcam (BTTS) e
+        dupla chance — todas derivadas da mesma grade de Poisson (placar a placar), sem
+        precisar de mais nenhum dado histórico além do que já calibra o 1X2."""
         home_xg, away_xg = self.expected_goals(home_team, away_team)
 
         home_win = draw = away_win = 0.0
         over_2_5 = 0.0
+        btts_yes = 0.0
 
         for hg in range(self.max_goals + 1):
             for ag in range(self.max_goals + 1):
@@ -141,6 +144,8 @@ class PoissonModel:
                     away_win += p
                 if hg + ag > 2:
                     over_2_5 += p
+                if hg > 0 and ag > 0:
+                    btts_yes += p
 
         return {
             "home_win": home_win,
@@ -148,4 +153,9 @@ class PoissonModel:
             "away_win": away_win,
             "over_2_5": over_2_5,
             "under_2_5": 1 - over_2_5,
+            "btts_yes": btts_yes,
+            "btts_no": 1 - btts_yes,
+            "double_chance_home_or_draw": home_win + draw,
+            "double_chance_away_or_draw": away_win + draw,
+            "double_chance_home_or_away": home_win + away_win,
         }

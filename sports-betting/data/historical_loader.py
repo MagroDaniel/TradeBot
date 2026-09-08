@@ -43,7 +43,7 @@ _COLUMN_ALIASES: list[dict[str, str]] = [
 # Coluna de data é opcional (habilita a ponderação temporal do PoissonModel) — procurada
 # à parte das colunas obrigatórias acima, já que seu nome não amarra a um formato específico.
 _DATE_COLUMN_ALIASES = ("Date", "data")
-_DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y")
+_DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d")
 
 
 def _detect_columns(fieldnames: list[str] | None) -> dict[str, str]:
