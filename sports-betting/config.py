@@ -65,6 +65,10 @@ ODDS_FORMAT = "decimal"
 EV_THRESHOLD = float(_get_env("EV_THRESHOLD", default="0.05"))  # EV mínimo (5%) para virar pick
 KELLY_FRACTION = float(_get_env("KELLY_FRACTION", default="0.25"))  # Kelly fracionário (25%)
 MAX_STAKE_FRACTION = float(_get_env("MAX_STAKE_FRACTION", default="0.03"))  # trava: 3% da banca por aposta
+# Nº de pernas do bilhete de múltipla sugerido (ver analysis/multiple.py) — uma por jogo, as de
+# maior probabilidade do dia entre TODOS os jogos (não só os que viraram pick +EV). "0" desativa
+# o recurso (nunca aparece na mensagem do Telegram).
+MULTIPLE_LEGS = int(_get_env("MULTIPLE_LEGS", default="4"))
 
 # --- Dados históricos (para calibrar o modelo de Poisson) ---
 # Um CSV por competição, em HISTORICAL_DATA_DIR/{sport_key}.csv (ex:

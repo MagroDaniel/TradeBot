@@ -25,6 +25,8 @@ class Pick:
     suggested_stake_fraction: float
     result: str | None = None  # "green" | "red" | None (ainda não resolvido)
     profit_units: float | None = None
+    bookmaker: str | None = None  # casa de apostas que ofereceu a melhor odd (None em picks
+    # salvos antes desse campo existir — carregados via Pick(**p), o default cobre isso)
 
 
 class PicksStore:
