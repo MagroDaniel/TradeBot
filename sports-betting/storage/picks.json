@@ -8,12 +8,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Borussia Dortmund vence",
-      "odds": 1.89,
+      "odds": 1.87,
       "model_probability": 0.5619908401186626,
-      "ev": 0.062162687824272256,
-      "suggested_stake_fraction": 0.017461429164121422,
+      "ev": 0.050922871021899185,
+      "suggested_stake_fraction": 0.014633008914338845,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Betfair"
     },
     {
       "event_id": "259414448d0b88e42b454f4e7deca152",
@@ -23,12 +24,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Empate",
-      "odds": 4.7,
+      "odds": 4.75,
       "model_probability": 0.2510408223758837,
-      "ev": 0.17989186516665345,
-      "suggested_stake_fraction": 0.012154855754503618,
+      "ev": 0.19244390628544772,
+      "suggested_stake_fraction": 0.01282959375236318,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Unibet (FR)"
     },
     {
       "event_id": "259414448d0b88e42b454f4e7deca152",
@@ -43,7 +45,8 @@
       "ev": 0.667236645082937,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Unibet (FR)"
     },
     {
       "event_id": "259414448d0b88e42b454f4e7deca152",
@@ -53,12 +56,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Under 2.5 gols",
-      "odds": 2.82,
+      "odds": 2.85,
       "model_probability": 0.4803198440853571,
-      "ev": 0.3545019603207069,
+      "ev": 0.36891155564326783,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Betsson"
     },
     {
       "event_id": "259414448d0b88e42b454f4e7deca152",
@@ -68,12 +72,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Ambas não marcam",
-      "odds": 2.74,
+      "odds": 2.78,
       "model_probability": 0.4480648020014302,
-      "ev": 0.22769755748391884,
+      "ev": 0.24562014956397582,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Matchbook"
     },
     {
       "event_id": "259414448d0b88e42b454f4e7deca152",
@@ -83,12 +88,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Inter Milan ou empate",
-      "odds": 2.41,
+      "odds": 2.5,
       "model_probability": 0.5487616518549796,
-      "ev": 0.3225155809705009,
+      "ev": 0.371904129637449,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Pinnacle"
     },
     {
       "event_id": "e47709952f60b21cbd0a358299071e5c",
@@ -98,12 +104,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Lille vence",
-      "odds": 2.28,
+      "odds": 2.3,
       "model_probability": 0.5099067192557548,
-      "ev": 0.16258731990312092,
+      "ev": 0.17278545428823588,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Betfair"
     },
     {
       "event_id": "e47709952f60b21cbd0a358299071e5c",
@@ -113,12 +120,13 @@
       "commence_time": "2026-09-08T19:00:00Z",
       "market": "soccer_uefa_champs_league:1x2/totals",
       "selection": "Under 2.5 gols",
-      "odds": 2.07,
+      "odds": 2.12,
       "model_probability": 0.5558410546996537,
-      "ev": 0.15059098322828302,
+      "ev": 0.17838303596326588,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Matchbook"
     },
     {
       "event_id": "e47709952f60b21cbd0a358299071e5c",
@@ -133,7 +141,24 @@
       "ev": 0.24160678269628155,
       "suggested_stake_fraction": 0.03,
       "result": null,
-      "profit_units": null
+      "profit_units": null,
+      "bookmaker": "Matchbook"
+    },
+    {
+      "event_id": "e47709952f60b21cbd0a358299071e5c",
+      "match": "Lille x Real Betis",
+      "home_team": "Lille",
+      "away_team": "Real Betis",
+      "commence_time": "2026-09-08T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Lille ou empate",
+      "odds": 1.37,
+      "model_probability": 0.7685675325319961,
+      "ev": 0.052937519568834634,
+      "suggested_stake_fraction": 0.03,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "1xBet"
     }
   ]
 }
