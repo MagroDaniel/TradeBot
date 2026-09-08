@@ -1,10 +1,12 @@
-"""Orquestração do bot: resolve sinais abertos (checa se bateu stop/alvo desde a última
-execução), depois escaneia os pares de maior volume em busca de sinal técnico novo.
+"""Orquestração do bot: manda o relatório do dia anterior (1x/dia, na primeira execução após
+meia-noite BRT), resolve sinais abertos (checa se bateu stop/alvo desde a última execução),
+depois escaneia os pares de maior volume em busca de sinal técnico novo.
 
-Ordem de execução — resolver antes de escanear — é deliberada, mesmo raciocínio do bot de
-apostas (resultado de ontem antes dos picks de hoje): confirma o resultado do que já foi
-alertado antes de gerar coisa nova. Pensado pra rodar a cada 15-30 min via cron/GitHub
-Actions — cripto não tem "horário de jogo" como futebol.
+Ordem de execução — relatório, depois resolver, depois escanear — é deliberada, mesmo
+raciocínio do bot de apostas (resultado de ontem antes dos picks de hoje): fecha o que já
+aconteceu antes de gerar coisa nova. Pensado pra rodar a cada 15-30 min via cron/GitHub
+Actions — cripto não tem "horário de jogo" como futebol, mas o relatório diário só sai 1x/dia
+mesmo assim (ver `send_daily_report_if_needed`).
 """
 from __future__ import annotations
 
@@ -13,8 +15,10 @@ from datetime import datetime, timedelta, timezone
 
 import config
 from alerts.telegram_notifier import TelegramNotifier
+from analysis.performance import summarize
 from analysis.signals import generate_signal
 from data.binance_client import BinanceClient, Candle
+from data.schedule import date_brt, today_brt
 from storage.signals_store import SignalRecord, SignalsStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -37,6 +41,34 @@ def _check_outcome(signal: SignalRecord, candles: list[Candle]) -> tuple[str, fl
             if c.low <= signal.target:
                 return "target_hit", signal.target
     return None
+
+
+def send_daily_report_if_needed(store: SignalsStore, notifier: TelegramNotifier) -> None:
+    """Manda o relatório do dia anterior (corte em meia-noite BRT) na primeira execução do
+    dia — não a cada run, então checa `last_report_date` antes de fazer qualquer coisa.
+    Mesma ordem do bot de apostas: resultado fechado antes de qualquer coisa nova."""
+    today = today_brt().isoformat()
+    if store.get_last_report_date() == today:
+        return  # já mandou hoje, não repete a cada execução de 15 em 15 min
+
+    yesterday = today_brt() - timedelta(days=1)
+    todays_records = [
+        r for r in store.all_signals() if r.closed_at and date_brt(r.closed_at) == yesterday
+    ]
+    summary = summarize(todays_records)
+
+    try:
+        notifier.send_daily_report(yesterday.isoformat(), summary, todays_records)
+    except Exception:
+        logger.exception("Falha ao enviar relatório diário")
+        return  # não marca como enviado — tenta de novo na próxima execução
+
+    logger.info(
+        "Relatório diário de %s enviado (%d sinal(is) resolvido(s))",
+        yesterday.isoformat(), len(todays_records),
+    )
+
+    store.set_last_report_date(today)
 
 
 def resolve_open_signals(client: BinanceClient, store: SignalsStore, notifier: TelegramNotifier) -> None:
@@ -131,6 +163,7 @@ def main() -> None:
     store = SignalsStore(config.STORAGE_PATH)
     notifier = TelegramNotifier(config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID)
 
+    send_daily_report_if_needed(store, notifier)
     resolve_open_signals(client, store, notifier)
     scan_for_new_signals(client, store, notifier)
 

@@ -70,18 +70,24 @@ válido. `data/binance_client.py`, `analysis/*`, `storage/signals_store.py` e
 `main.py::main()` roda uma checagem por execução (repetição vem do agendamento externo, não de um loop
 interno):
 
-1. **`resolve_open_signals()`** — pra cada sinal com `status="open"` em `SignalsStore`, busca candles desde
+1. **`send_daily_report_if_needed()`** — compara `today_brt()` (ver `data/schedule.py`) contra
+   `store.get_last_report_date()`; se já bateu meia-noite BRT desde o último relatório, resume (via
+   `analysis/performance.summarize`) todos os sinais cujo `closed_at` cai no dia anterior em BRT
+   (`date_brt`) e manda pro Telegram. Só dispara 1x/dia mesmo rodando a cada 15 min — a checagem de data é
+   o que evita repetir. Se o envio falhar, **não** marca `last_report_date` como enviado — tenta de novo na
+   próxima execução (mesmo padrão de "só marca sucesso depois de confirmar" do resto do projeto).
+2. **`resolve_open_signals()`** — pra cada sinal com `status="open"` em `SignalsStore`, busca candles desde
    `opened_at` e confere se o preço bateu no stop ou no alvo primeiro (`_check_outcome` — **checa o stop
    primeiro dentro de cada candle**, padrão conservador de backtest: se os dois seriam tocados no mesmo
    candle, assume que o stop bateu primeiro, não superestima acerto). Sinal aberto há mais de
    `SIGNAL_EXPIRY_HOURS` sem bater nenhum dos dois vira `"expired"`. Resultado real vai pro Telegram
    (`notifier.send_result`) e é persistido (`store.update`).
-2. **`scan_for_new_signals()`** — pra cada um dos `TOP_SYMBOLS_COUNT` pares de maior volume que **não**
+3. **`scan_for_new_signals()`** — pra cada um dos `TOP_SYMBOLS_COUNT` pares de maior volume que **não**
    já tem sinal aberto (`store.has_open_signal_for` — não empilha sinal novo em cima de aberto pro mesmo
    par), busca candles e chama `generate_signal()`. Se gerar sinal, manda pro Telegram e persiste.
 
-Ordem (resolver antes de escanear) é deliberada — mesmo raciocínio do bot de apostas (resultado de ontem
-antes dos picks de hoje).
+Ordem (relatório → resolver → escanear) é deliberada — mesmo raciocínio do bot de apostas (resultado de
+ontem antes dos picks de hoje): fecha o que já aconteceu antes de gerar coisa nova.
 
 ### Indicadores (`analysis/indicators.py`)
 
@@ -116,6 +122,14 @@ melhoria de robustez do pivô, não só uma coincidência.
 - `get_top_symbols_by_volume()` — uma chamada só a `/ticker/24hr` sem `symbol` (devolve todos os pares),
   filtra por sufixo do par de cotação e exclui stablecoins, ordena por `quoteVolume`.
 - `get_klines()` — candles OHLCV, mais antigo primeiro (ordem nativa da Binance, não invertida).
+
+### Relatório diário e fuso horário (`data/schedule.py`)
+
+Mesmo módulo/lógica do bot de apostas (`../sports-betting/data/schedule.py`) — BRT como offset fixo UTC-3,
+sem `zoneinfo`/`pytz`. Cripto não tem "fechamento de pregão" como bolsa de valores, mas o usuário pediu um
+relatório de fim de dia mesmo assim — meia-noite BRT foi escolhida como corte por ser a referência natural
+pro público do bot (mesmo raciocínio do resto do projeto: BRT em vez do fuso do runner do GitHub Actions,
+que roda em UTC).
 
 ### Armazenamento (`storage/signals_store.py`)
 

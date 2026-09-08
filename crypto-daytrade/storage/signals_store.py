@@ -33,7 +33,7 @@ class SignalsStore:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
-            self.path.write_text(json.dumps({"signals": []}), encoding="utf-8")
+            self.path.write_text(json.dumps({"signals": [], "last_report_date": None}), encoding="utf-8")
 
     def _read(self) -> dict:
         return json.loads(self.path.read_text(encoding="utf-8"))
@@ -56,6 +56,16 @@ class SignalsStore:
     def all_signals(self) -> list[SignalRecord]:
         data = self._read()
         return [SignalRecord(**s) for s in data["signals"]]
+
+    def get_last_report_date(self) -> str | None:
+        """Data (ISO, `YYYY-MM-DD`) do último relatório diário enviado — `None` se nunca
+        enviou (arquivo antigo sem essa chave, ou primeira execução de sempre)."""
+        return self._read().get("last_report_date")
+
+    def set_last_report_date(self, iso_date: str) -> None:
+        data = self._read()
+        data["last_report_date"] = iso_date
+        self._write(data)
 
     def update(self, updated: list[SignalRecord]) -> None:
         """Substitui os registros pelos atualizados, casando por (symbol, opened_at) — chave

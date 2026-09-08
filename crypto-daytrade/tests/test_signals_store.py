@@ -58,6 +58,39 @@ def test_update_changes_status_and_keeps_others_untouched(tmp_path):
     assert store.has_open_signal_for("ETHUSDT")
 
 
+def test_last_report_date_is_none_by_default(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+
+    assert store.get_last_report_date() is None
+
+
+def test_set_and_get_last_report_date(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+
+    store.set_last_report_date("2026-09-08")
+
+    assert store.get_last_report_date() == "2026-09-08"
+
+
+def test_set_last_report_date_does_not_lose_signals(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+    store.add(_record())
+
+    store.set_last_report_date("2026-09-08")
+
+    assert len(store.all_signals()) == 1
+
+
+def test_get_last_report_date_on_file_without_that_key(tmp_path):
+    # simula um signals.json salvo antes dessa funcionalidade existir
+    path = tmp_path / "signals.json"
+    path.write_text('{"signals": []}', encoding="utf-8")
+
+    store = SignalsStore(path)
+
+    assert store.get_last_report_date() is None
+
+
 def test_persists_across_new_instances(tmp_path):
     path = tmp_path / "signals.json"
     SignalsStore(path).add(_record())

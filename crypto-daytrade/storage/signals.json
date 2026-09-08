@@ -103,6 +103,20 @@
       "status": "open",
       "closed_at": null,
       "close_price": null
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "direction": "long",
+      "entry": 0.0902,
+      "stop_loss": 0.08955033555806768,
+      "target": 0.09149932888386464,
+      "rsi_value": 59.40519122157076,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 59 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:48:11.419310+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
-  ]
+  ],
+  "last_report_date": "2026-09-08"
 }

@@ -23,15 +23,19 @@ esses são exatamente os sinais de canal predatório que motivaram esse aviso.
 
 ## Como funciona
 
-1. **Resolve sinais abertos** — pra cada sinal ainda em aberto, busca os candles desde que
+1. **Relatório do dia anterior** — 1x por dia (na primeira execução depois da meia-noite
+   BRT), manda um resumo de todos os sinais resolvidos no dia anterior: quantos bateram
+   alvo, quantos bateram stop, quantos expiraram, e a taxa de acerto real (sem filtrar
+   perda). Não repete a cada execução de 15 em 15 min.
+2. **Resolve sinais abertos** — pra cada sinal ainda em aberto, busca os candles desde que
    foi emitido e confere se o preço bateu no stop ou no alvo primeiro (ou expirou sem bater
    nenhum dos dois dentro de `SIGNAL_EXPIRY_HOURS`). Manda o resultado real pro Telegram.
-2. **Escaneia por sinal novo** — pega os `TOP_SYMBOLS_COUNT` pares de maior volume (USDT,
+3. **Escaneia por sinal novo** — pega os `TOP_SYMBOLS_COUNT` pares de maior volume (USDT,
    stablecoins excluídas), calcula EMA9, EMA21, RSI14 e ATR14 sobre os candles de
    `TIMEFRAME`, e gera um sinal quando a EMA rápida cruza a lenta **confirmado** por RSI numa
    faixa que não seja já sobrecomprada/sobrevendida.
-3. **Telegram** — manda um alerta por sinal novo (entrada/stop/alvo/RSI/motivo) e depois,
-   quando resolvido, o resultado real (alvo batido / stop batido / expirado).
+4. **Telegram** — manda um alerta por sinal novo (entrada/stop/alvo/RSI/motivo), o resultado
+   real quando resolvido (alvo batido / stop batido / expirado), e o relatório diário.
 
 ## Estratégia (transparente, sem "caixa preta")
 
@@ -111,9 +115,10 @@ Para ativar:
 ```
 crypto-daytrade/
 ├── config.py                  # configuração via variáveis de ambiente
-├── main.py                    # orquestra resolver + escanear
+├── main.py                    # orquestra relatório diário + resolver + escanear
 ├── data/
-│   └── binance_client.py      # top pares por volume + candles (klines)
+│   ├── binance_client.py      # top pares por volume + candles (klines)
+│   └── schedule.py            # utilitários de data/hora em BRT (corte do relatório diário)
 ├── analysis/
 │   ├── indicators.py          # EMA, RSI, ATR (funções puras)
 │   ├── signals.py             # decide entrada/stop/alvo a partir dos indicadores

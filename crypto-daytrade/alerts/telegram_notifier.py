@@ -10,6 +10,7 @@ import logging
 
 import requests
 
+from analysis.performance import PerformanceSummary
 from storage.signals_store import SignalRecord
 
 logger = logging.getLogger(__name__)
@@ -66,4 +67,27 @@ class TelegramNotifier:
             f"{icon} <b>{signal.symbol} — {label}</b>",
             f"{signal.direction.upper()} · Entrada: {signal.entry:.6g} · Fechou: {close_price}",
         ]
+        self._send("\n".join(lines))
+
+    def send_daily_report(
+        self, report_date: str, summary: PerformanceSummary, records: list[SignalRecord]
+    ) -> None:
+        """Relatório do dia anterior — meia-noite BRT é o corte (ver `data/schedule.py`),
+        já que cripto não tem "fechamento de pregão". Lista TODOS os sinais resolvidos no
+        dia, vitória e derrota — nunca filtra pra esconder perda (ver CLAUDE.md)."""
+        if not records:
+            self._send(f"📊 <b>Relatório do dia — {report_date}</b>\nNenhum sinal resolvido nesse dia.")
+            return
+
+        lines = [f"📊 <b>Relatório do dia — {report_date}</b>", ""]
+        for r in records:
+            icon, label = _RESULT_LABELS.get(r.status, ("ℹ️", r.status))
+            close_price = f"{r.close_price:.6g}" if r.close_price is not None else "?"
+            lines.append(f"{icon} {r.symbol} {r.direction.upper()} — {label} (fechou {close_price})")
+
+        lines.append("")
+        lines.append(
+            f"<b>Resumo:</b> {summary.wins}✅ / {summary.losses}❌ / {summary.expired}⌛ "
+            f"— acerto de {summary.win_rate:.0%} (sobre sinais decisivos, sem contar expirados)"
+        )
         self._send("\n".join(lines))
