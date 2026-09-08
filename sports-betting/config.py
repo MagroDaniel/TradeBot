@@ -40,9 +40,18 @@ KELLY_FRACTION = float(_get_env("KELLY_FRACTION", default="0.25"))  # Kelly frac
 MAX_STAKE_FRACTION = float(_get_env("MAX_STAKE_FRACTION", default="0.03"))  # trava: 3% da banca por aposta
 
 # --- Dados históricos (para calibrar o modelo de Poisson) ---
-# CSV no formato football-data.co.uk (colunas: HomeTeam, AwayTeam, FTHG, FTAG)
+# CSV no formato football-data.co.uk (ligas europeias) ou adaoduque/Brasileirao_Dataset
+# (Brasileirão) — historical_loader.py detecta o formato automaticamente.
 HISTORICAL_DATA_PATH = _get_env(
     "HISTORICAL_DATA_PATH", default="data/historical/brasileirao.csv"
+)
+# Meia-vida (em dias) da ponderação temporal do modelo: jogos com essa idade pesam metade
+# de um jogo de hoje na calibração. Evita que times historicamente fortes mas em fase
+# ruim atualmente (ou vice-versa) distorçam a força estimada. Deixe em branco/"none"
+# para desativar (média simples sobre todo o histórico, comportamento anterior).
+_half_life_raw = _get_env("MODEL_HALF_LIFE_DAYS", default="1095")
+MODEL_HALF_LIFE_DAYS: float | None = (
+    None if _half_life_raw.strip().lower() in ("", "none") else float(_half_life_raw)
 )
 
 # --- Armazenamento ---

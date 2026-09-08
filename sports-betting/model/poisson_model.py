@@ -7,6 +7,12 @@ Abordagem clássica (Maher, 1982 — base do modelo Dixon-Coles):
 - A partir dos gols esperados (lambda), calcula-se P(placar) via Poisson e agrega-se
   para 1X2, over/under, etc.
 
+Jogos mais recentes pesam mais na calibração (decaimento exponencial por meia-vida,
+`half_life_days`) — sem isso, um time historicamente forte mas em fase ruim atualmente
+(ex: vários títulos antigos, temporada atual fraca) infla demais a força estimada e gera
+EVs artificialmente altos. Times sem data (`MatchResult.match_date=None`) ou
+`half_life_days=None` caem de volta pra média simples, sem ponderação.
+
 É um modelo simples e transparente — bom ponto de partida. Fica fácil evoluir depois
 para Dixon-Coles completo (correção para placares baixos) ou um modelo de ML.
 """
@@ -14,6 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -22,6 +29,7 @@ class MatchResult:
     away_team: str
     home_goals: int
     away_goals: int
+    match_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -37,11 +45,20 @@ def _poisson_pmf(k: int, lam: float) -> float:
 class PoissonModel:
     """Calibra forças de ataque/defesa a partir de resultados históricos e prevê partidas."""
 
-    def __init__(self, max_goals: int = 8) -> None:
+    def __init__(self, max_goals: int = 8, half_life_days: float | None = 1095) -> None:
         self.max_goals = max_goals
+        self.half_life_days = half_life_days  # None desativa a ponderação temporal
         self.team_strength: dict[str, TeamStrength] = {}
         self.league_avg_home_goals: float = 1.5
         self.league_avg_away_goals: float = 1.2
+
+    def _match_weight(self, match: MatchResult, reference_date: date | None) -> float:
+        """Peso do jogo na calibração: 1.0 se não há data (do jogo ou de referência) ou
+        ponderação está desligada; decai pela metade a cada `half_life_days` de idade."""
+        if self.half_life_days is None or match.match_date is None or reference_date is None:
+            return 1.0
+        age_days = max((reference_date - match.match_date).days, 0)
+        return 0.5 ** (age_days / self.half_life_days)
 
     def fit(self, matches: list[MatchResult]) -> "PoissonModel":
         if not matches:
@@ -49,30 +66,38 @@ class PoissonModel:
 
         teams = {m.home_team for m in matches} | {m.away_team for m in matches}
 
-        n = len(matches)
-        self.league_avg_home_goals = sum(m.home_goals for m in matches) / n
-        self.league_avg_away_goals = sum(m.away_goals for m in matches) / n
+        dated = [m.match_date for m in matches if m.match_date is not None]
+        reference_date = max(dated) if dated else None
+        weights = [self._match_weight(m, reference_date) for m in matches]
+
+        total_weight = sum(weights)
+        self.league_avg_home_goals = (
+            sum(w * m.home_goals for w, m in zip(weights, matches)) / total_weight
+        )
+        self.league_avg_away_goals = (
+            sum(w * m.away_goals for w, m in zip(weights, matches)) / total_weight
+        )
 
         raw: dict[str, dict[str, float]] = {
             t: {
-                "scored_home": 0.0, "conceded_home": 0.0, "games_home": 0,
-                "scored_away": 0.0, "conceded_away": 0.0, "games_away": 0,
+                "scored_home": 0.0, "conceded_home": 0.0, "games_home": 0.0,
+                "scored_away": 0.0, "conceded_away": 0.0, "games_away": 0.0,
             }
             for t in teams
         }
-        for m in matches:
+        for w, m in zip(weights, matches):
             h, a = raw[m.home_team], raw[m.away_team]
-            h["scored_home"] += m.home_goals
-            h["conceded_home"] += m.away_goals
-            h["games_home"] += 1
-            a["scored_away"] += m.away_goals
-            a["conceded_away"] += m.home_goals
-            a["games_away"] += 1
+            h["scored_home"] += w * m.home_goals
+            h["conceded_home"] += w * m.away_goals
+            h["games_home"] += w
+            a["scored_away"] += w * m.away_goals
+            a["conceded_away"] += w * m.home_goals
+            a["games_away"] += w
 
         strengths: dict[str, TeamStrength] = {}
         for team, s in raw.items():
-            games_h = max(s["games_home"], 1)
-            games_a = max(s["games_away"], 1)
+            games_h = max(s["games_home"], 1e-9)
+            games_a = max(s["games_away"], 1e-9)
 
             attack_home = (s["scored_home"] / games_h) / self.league_avg_home_goals
             attack_away = (s["scored_away"] / games_a) / self.league_avg_away_goals
