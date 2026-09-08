@@ -1,5 +1,6 @@
 name: Daily Picks — Sports Betting Bot
 
+# (Republicado pra forçar o GitHub a reindexar o workflow.)
 on:
   schedule:
     # 11:00 UTC = 08:00 BRT (UTC-3). Ajuste se estiver em outro fuso.
