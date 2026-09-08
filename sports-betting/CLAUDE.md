@@ -266,8 +266,11 @@ Pendências conhecidas (decisões conscientes, não bugs):
 - Modelo combinado das copas UEFA não normaliza diferença de padrão de gols entre as 5 ligas domésticas
   (ver "Fronteira de acesso a dados" acima) — simplificação deliberada, não uma modelagem por-liga completa.
 
-## Projeto irmão (ainda não iniciado)
+## Projeto irmão
 
-Um bot de "daytrade" (mercado financeiro) está planejado como um segundo projeto, compartilhando a mesma
-lógica de fundo — probabilidade do modelo vs. preço de mercado, a mesma matemática do value betting daqui.
-Ainda não existe código para ele.
+`../crypto-daytrade/` (raiz do repo `TradeBot`) — bot que alerta sobre novas listagens de criptomoeda na
+Binance. Mesma filosofia (só análise/alerta, sem executar nada sozinho), mas **sem** o equivalente do EV —
+não existe uma fórmula matemática objetiva pra "essa moeda nova vai bombar" (diferente daqui, onde EV
+compara a probabilidade do modelo contra a odd de mercado). Tem seu próprio bot/grupo do Telegram e roda a
+cada 15-30 min (não 1x/dia — listagem de cripto não tem "horário de jogo"). Ver o `CLAUDE.md` de lá pra
+detalhes.

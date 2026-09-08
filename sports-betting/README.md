@@ -193,5 +193,6 @@ sports-betting/
   manual por enquanto).
 - **Persistência mais robusta** — trocar o JSON por SQLite/Postgres se o
   histórico crescer muito.
-- Projeto irmão de **daytrade** (mercado financeiro) compartilhando a mesma
-  lógica de "probabilidade vs. preço de mercado" — planejado para depois.
+- Projeto irmão **`../crypto-daytrade/`** — bot de análise de novas listagens de
+  criptomoeda na Binance, mesma filosofia (só análise/alerta, sem executar
+  nada sozinho).
