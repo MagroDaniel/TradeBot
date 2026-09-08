@@ -4,33 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## O que é isto
 
-Um bot que roda a cada 15-30 min (README, comentários e mensagens do Telegram — tudo em pt-BR) e checa
-anúncios novos de listagem de criptomoeda na Binance, resume o risco que a própria Binance sinalizou no
-anúncio (Seed Tag / Innovation Zone / Monitoring Tag) e o momentum de mercado (se já estiver operando), e
-manda um alerta pelo Telegram. **Ele nunca compra nada sozinho** — só alerta; a decisão e a execução ficam
-com o humano. Projeto irmão de `../sports-betting/`, mesma filosofia (análise/alerta, não execução).
+Um bot que roda a cada 15-30 min (README, comentários e mensagens do Telegram — tudo em pt-BR) e escaneia
+os pares de maior volume na Binance procurando sinal técnico (cruzamento de EMA9/EMA21 confirmado por
+RSI14), mandando entrada/stop loss/alvo pro Telegram — nunca alavancagem. Ele **nunca opera nada sozinho**
+— só alerta; a decisão e a execução ficam com o humano. Projeto irmão de `../sports-betting/`, mesma
+filosofia (análise/alerta, não execução).
+
+**Pivô de escopo (2026-09-08)**: este projeto começou como um bot de alerta de *novas listagens* na Binance
+(ver commit `feat: scaffold bot de análise de novas listagens na Binance`). O usuário viu o resultado, não
+gostou, e mostrou prints de canais de "sinais VIP" (entrada/stop/alvo/alavancagem, informação trancada
+atrás de assinatura paga) como referência do que queria. O projeto foi **reescrito do zero** pra gerar
+sinais técnicos de verdade — mas deliberadamente SEM copiar o padrão enganoso desses canais (ver "Decisões
+já tomadas" abaixo). Se encontrar código ou histórico de commit mencionando "listagem"/"anúncio"/
+`seen_listings`, é resquício do escopo antigo — não existe mais, não tente reviver.
 
 ## Decisões já tomadas (não reabrir sem motivo)
 
-- **Só análise/alerta, sem execução automática** — decisão explícita do usuário ao criar o projeto (mesma
-  filosofia do bot de apostas). Risco de perda financeira automática, inclusive em token golpe, foi motivo
-  citado pra não automatizar a compra.
-- **Não existe fórmula de "vai bombar"** — diferente do bot de apostas (EV = probabilidade do modelo vs.
-  odd de mercado, um número objetivo), aqui não há edge matemático comparável. `analysis/scoring.py` se
-  limita a resumir dois sinais objetivos (risco sinalizado pela Binance + momentum de mercado), nunca produz
-  uma recomendação binária "compra"/"não compra". Não adicione uma pontuação de "provável sucesso" sem
-  discutir com o usuário — foi uma escolha deliberada de manter honesto sobre o que dá pra saber de verdade.
-- **Fonte de dados: só Binance por enquanto** — decisão explícita do usuário ("de onde puxar a lista de
-  moedas novas"), CoinGecko/CoinMarketCap ficaram de fora do escopo inicial.
-- **Sinal de segurança: tags de risco da própria Binance, não checagem on-chain** — o usuário pediu
-  "segurança anti-golpe (liquidez travada, concentração de holders, contrato auditado)" como critério, mas
-  a implementação inicial usa as tags que a Binance já aplica no anúncio (Seed Tag etc.) em vez de integrar
-  uma API de segurança on-chain (ex: GoPlus) — mais simples, mais confiável pro escopo de "é arriscado
-  segundo a própria exchange", e não depende de extrair endereço de contrato do anúncio (nem sempre
-  disponível). Checagem on-chain mais profunda é um roadmap item, não implementada.
-- **Telegram separado do bot de apostas** — bot e grupo próprios, não reaproveita credenciais.
-- **Frequência: 15-30 min**, não 1x/dia — decisão explícita do usuário, já que listagem de cripto acontece
-  a qualquer hora (diferente de futebol, que tem horário de jogo).
+- **Nunca sugere alavancagem** — a decisão mais importante deste projeto. Canais de "sinal VIP" sempre
+  recomendam um multiplicador (5x, 20x...); é o que mais quebra conta de quem segue o sinal, e é a marca
+  registrada do padrão predatório que o usuário explicitamente pediu pra NÃO replicar. Não adicione um
+  campo de alavancagem na mensagem ou no `SignalRecord` sem decisão explícita do usuário revisitando essa
+  escolha.
+- **Histórico de performance tem que ser real, nunca fabricado ou filtrado** — `storage/signals_store.py`
+  registra TODO sinal emitido, e `analysis/performance.py` soma vitórias E derrotas. O usuário quer
+  eventualmente oferecer/vender isso pra terceiros — nesse contexto, mostrar só os sinais que deram certo
+  (como o canal de referência que ele mostrou) seria fabricar prova de desempenho. Não implemente nenhum
+  filtro de exibição que esconda `stop_hit` do histórico.
+- **Aviso regulatório**: vender recomendação de operação financeira no Brasil tem implicação da CVM
+  (normalmente exige registro como analista de valores mobiliários). Isso não é um problema de código — é
+  uma decisão de negócio do usuário, fora do escopo deste repositório — mas o README/CLAUDE.md deixam o
+  aviso registrado porque veio explicitamente da intenção declarada de "vender pra outras pessoas".
+- **Só análise/alerta, sem execução automática** — mesma filosofia do bot de apostas.
+- **Estratégia clássica e documentada (EMA9/EMA21 + RSI14 + ATR14)**, não uma "caixa preta" — cada sinal
+  carrega `reason` explicando exatamente por que saiu (ver "Modelo de sinal" abaixo). Escolhida por ser um
+  método padrão, replicável e sem alegação de edge que não se pode sustentar.
+- **Top pares por volume (~25), timeframe 15m** — decisão explícita do usuário. Stablecoins (USDC, USD1,
+  FDUSD etc.) são filtradas na origem (`_STABLECOIN_BASES` em `binance_client.py`) porque têm volume alto
+  mas preço travado em ~1.00, nunca geram cruzamento real — desperdiçariam uma chamada de klines por
+  execução sem gerar sinal.
+- **Telegram separado do bot de apostas** — bot e grupo próprios (secrets do GitHub prefixados `CRYPTO_`,
+  ver "Automação" abaixo).
 
 ## Comandos
 
@@ -48,82 +61,101 @@ pytest
 
 As credenciais (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) são obrigatórias — `config.py` levanta
 `RuntimeError` na importação se estiverem faltando, então `main.py` não pode ser importado sem um `.env`
-válido. `data/binance_client.py`, `analysis/scoring.py`, `storage/seen_listings.py` e
+válido. `data/binance_client.py`, `analysis/*`, `storage/signals_store.py` e
 `alerts/telegram_notifier.py` não têm essa dependência — a suíte de testes cobre todos esses mockando
 `requests`, sem precisar de credenciais reais.
 
 ## Arquitetura
 
-`main.py::main()` roda uma checagem por execução (não é um loop contínuo — a repetição vem do
-agendamento externo via cron/GitHub Actions):
+`main.py::main()` roda uma checagem por execução (repetição vem do agendamento externo, não de um loop
+interno):
 
-1. Busca os últimos anúncios da categoria "New Cryptocurrency Listing"
-   (`BinanceClient.get_new_listing_announcements`).
-2. Filtra os que ainda não foram vistos (`SeenListingsStore.seen_ids()`).
-3. Pra cada anúncio novo: extrai o ticker do título (regex sobre o texto entre parênteses — ex: "Binance
-   Will List MarsCoin (MARSCOIN)" → `MARSCOIN`; nem todo título tem esse padrão, ex: anúncios de futuros
-   perpétuos não têm parênteses de ticker e ficam com `ticker=None`, o que já filtra naturalmente pra fora
-   a maioria dos anúncios que não são listagem nova de spot), confere se o par `{ticker}USDT` já está
-   `TRADING` na Binance, busca o ticker de 24h se estiver, e gera um `Assessment` (ver "Modelo de
-   avaliação" abaixo).
-4. Envia um alerta por anúncio novo pro Telegram.
-5. Só marca como visto **depois** de tentar enviar todos — se o processo cair no meio, os que falharam
-   continuam "não vistos" e são retentados na próxima execução (ver `main.py`, comentário no fim da função).
+1. **`resolve_open_signals()`** — pra cada sinal com `status="open"` em `SignalsStore`, busca candles desde
+   `opened_at` e confere se o preço bateu no stop ou no alvo primeiro (`_check_outcome` — **checa o stop
+   primeiro dentro de cada candle**, padrão conservador de backtest: se os dois seriam tocados no mesmo
+   candle, assume que o stop bateu primeiro, não superestima acerto). Sinal aberto há mais de
+   `SIGNAL_EXPIRY_HOURS` sem bater nenhum dos dois vira `"expired"`. Resultado real vai pro Telegram
+   (`notifier.send_result`) e é persistido (`store.update`).
+2. **`scan_for_new_signals()`** — pra cada um dos `TOP_SYMBOLS_COUNT` pares de maior volume que **não**
+   já tem sinal aberto (`store.has_open_signal_for` — não empilha sinal novo em cima de aberto pro mesmo
+   par), busca candles e chama `generate_signal()`. Se gerar sinal, manda pro Telegram e persiste.
 
-### Fonte de anúncios (`data/binance_client.py`)
+Ordem (resolver antes de escanear) é deliberada — mesmo raciocínio do bot de apostas (resultado de ontem
+antes dos picks de hoje).
 
-`ANNOUNCEMENTS_URL` é o endpoint que o **próprio site da Binance usa internamente** pra listar
-comunicados — **não é uma API oficialmente documentada/suportada**, pode mudar de formato ou parar de
-funcionar sem aviso. `catalogId=48` corresponde a "New Cryptocurrency Listing" (confirmado manualmente
-testando o retorno em 2026-09) — se o bot parar de achar anúncios novos, esse é o primeiro lugar a checar
-(o catalogId pode ter mudado, ou o endpoint pode ter sido descontinuado).
+### Indicadores (`analysis/indicators.py`)
 
-Em contraste, `MARKET_BASE_URL` (`/api/v3/*`) **é** a API pública oficial de mercado da Binance,
-documentada e estável — usada só pra `exchangeInfo` (checar se um par está `TRADING`) e `ticker/24hr`
-(momentum). Nenhum dos dois grupos de endpoint exige chave de API.
+Funções puras, sem I/O — mesmo espírito de `analysis/ev.py`/`kelly.py` do bot de apostas. `ema()` usa SMA
+como semente pros primeiros `period` valores (prática padrão). `rsi()` é o RSI de Wilder (suavização
+exponencial das médias de ganho/perda, não SMA simples). `atr()` também usa suavização de Wilder. Todas
+retornam listas alinhadas ao fim: o último elemento de qualquer uma dessas séries sempre corresponde ao
+candle mais recente do input, mesmo que os arrays tenham tamanhos diferentes entre si (por causa dos
+diferentes "aquecimentos" de cada período) — é assim que `signals.py` consegue comparar `[-1]`/`[-2]` de
+séries de tamanhos diferentes sem alinhar manualmente.
 
-### Modelo de avaliação (`analysis/scoring.py`)
+### Modelo de sinal (`analysis/signals.py`)
 
-`assess()` NUNCA produz uma recomendação binária — só resume dois sinais:
-- `risk_tags`: quais das `RISK_TAGS` (`"Seed Tag"`, `"Innovation Zone"`, `"Monitoring Tag"`) aparecem no
-  título do anúncio, case-insensitive. Ausência de tag não significa "seguro" — só que a Binance não
-  aplicou aviso extra (ver docstring do módulo). `is_high_risk` é `bool(risk_tags)`.
-- `price_change_percent` / `quote_volume`: vêm direto do `ticker/24hr` da Binance quando o par já está
-  `TRADING`; `None` quando ainda não tem dado de mercado (anúncio saiu antes da moeda começar a operar).
+`generate_signal()` retorna `None` na maioria das chamadas — sinal é evento raro por design, não um
+palpite forçado a cada execução. Dispara quando:
+- **Long**: EMA9 cruza de baixo pra cima da EMA21 **e** RSI14 no candle do cruzamento está entre 30-65
+  (`LONG_RSI_RANGE`) — filtro que evita comprar já sobrecomprado mesmo com o cruzamento "a favor".
+- **Short**: cruzamento inverso, RSI entre 35-70 (`SHORT_RSI_RANGE`).
 
-Se algum dia adicionar um novo sinal (ex: segurança on-chain via GoPlus, hype social), estenda `Assessment`
-como mais um campo descritivo em `summary()` — não transforme isso numa pontuação agregada de "compra"
-sem decisão explícita do usuário (ver "Decisões já tomadas" acima).
+Stop = `entry ∓ ATR_STOP_MULTIPLIER(1.5) × ATR14`; alvo = `entry ± RISK_REWARD_RATIO(2.0) × risco`. Os
+testes (`tests/test_signals.py`) usam fixtures de preço sintético **validadas empiricamente** (uma sequência
+de queda leve seguida de alta/queda calibrada pra cruzar as médias com o RSI dentro da faixa esperada) —
+se for ajustar `LONG_RSI_RANGE`/`SHORT_RSI_RANGE` ou os períodos de EMA, terá que recalibrar essas
+fixtures também (rodar o sinal contra a sequência sintética e conferir se ainda dispara — os valores atuais
+não são arbitrários, foram encontrados por tentativa empírica, documentado no processo do commit).
 
-### Armazenamento (`storage/seen_listings.py`)
+### Fonte de dados (`data/binance_client.py`)
 
-JSON simples com uma lista de `article_id`s já vistos, limitada a 500 (`_MAX_IDS_KEPT`) pra não crescer pra
-sempre — mesmo raciocínio de simplicidade do bot de apostas (`storage/picks_store.py` lá).
+**Só usa `/api/v3/*`, a API pública oficial de mercado da Binance** (documentada, estável, sem chave) —
+diferente do projeto antigo de listagens, que dependia de um endpoint não-oficial do site. Isso é uma
+melhoria de robustez do pivô, não só uma coincidência.
+- `get_top_symbols_by_volume()` — uma chamada só a `/ticker/24hr` sem `symbol` (devolve todos os pares),
+  filtra por sufixo do par de cotação e exclui stablecoins, ordena por `quoteVolume`.
+- `get_klines()` — candles OHLCV, mais antigo primeiro (ordem nativa da Binance, não invertida).
+
+### Armazenamento (`storage/signals_store.py`)
+
+JSON simples (`SignalRecord` — symbol, direction, entry, stop_loss, target, rsi_value, reason, opened_at,
+status, closed_at, close_price) igual em espírito ao `Pick`/`picks_store.py` do bot de apostas: um
+registro que acumula estado "aberto" → "resolvido" via campos opcionais, em vez de tipos separados.
+`update()` casa registros por `(symbol, opened_at)` — chave natural já que um símbolo pode ter vários
+sinais ao longo do tempo (um por vez, já que `has_open_signal_for` impede sobreposição).
+
+### Performance (`analysis/performance.py`)
+
+Espelha `backtest/backtester.py` do bot de apostas. `win_rate` só considera `wins + losses` no denominador
+— sinais `expired` não contam a favor nem contra (nem ganharam nem perderam, ficaram sem definição dentro
+do prazo). **Nunca filtre `stop_hit` do que entra em `summarize()`** — ver "Decisões já tomadas" acima.
 
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
-Ícone 🚨 quando `assessment.is_high_risk`, senão 🆕. Toda mensagem termina com um disclaimer fixo
-(`_DISCLAIMER`) deixando claro que não é previsão de alta e que bots profissionais costumam já ter
-capturado o movimento antes do alerta chegar — não remova esse aviso sem decisão explícita do usuário, é
-uma proteção deliberada dado o perfil de risco do domínio (bem mais arriscado que apostar contra uma odd
-de mercado, que já tem o próprio disclaimer de EV no bot de apostas).
+`send_signal_alert` mostra entrada/stop/alvo/RSI/motivo + disclaimer fixo (nunca alavancagem, análise
+técnica não é garantia). `send_result` usa ✅/❌/⌛ conforme `status`. Nenhum dos dois textos deve ser
+editado pra remover o disclaimer ou pra "vender" o sinal com linguagem de certeza — ver "Decisões já
+tomadas" acima.
+
+### Automação
+
+`.github/workflows/crypto_daytrade.yml` (raiz do repo `TradeBot`) — cron a cada 15 min +
+`workflow_dispatch`. Secrets **prefixados `CRYPTO_`** (`CRYPTO_TELEGRAM_BOT_TOKEN`,
+`CRYPTO_TELEGRAM_CHAT_ID`) porque secrets do GitHub Actions são por repositório, não por workflow, e os
+nomes sem prefixo já pertencem ao bot de apostas no mesmo repo. Commita `storage/signals.json` de volta a
+cada run (runners são efêmeros).
 
 ## Status atual
 
-Scaffold inicial criado e testado com dados reais (2026-09-08): `get_new_listing_announcements` +
-`find_trading_usdt_pair` + `get_24hr_ticker` + `assess()` rodados de ponta a ponta contra a API real da
-Binance (achou o anúncio real da MarsCoin com "Seed Tag", casou com o par `MARSCOINUSDT` já operando, e
-mostrou o momentum real de -15.6% em 24h). Suíte de testes (19 testes) passando, sem rede.
+Reescrito do zero em 2026-09-08 (pivô de "listagens novas" pra "sinais técnicos"), testado de ponta a ponta
+com dados e credenciais reais: `python main.py` rodado localmente, gerou **8 sinais reais de 25 pares
+escaneados**, todos enviados com sucesso pro grupo do Telegram (formato confirmado pelo usuário — entrada/
+stop/alvo/RSI, sem menção a alavancagem). `resolve_open_signals` ainda não foi exercitado de ponta a ponta
+contra um sinal que realmente bateu stop/alvo/expirou (só roda quando existe sinal `"open"` no
+`storage/signals.json` — os 8 gerados nesse run ainda estavam abertos). 36 testes automatizados passando,
+sem rede.
 
-**Ainda não configurado**: bot/grupo do Telegram (precisa criar via @BotFather, separado do bot de
-apostas), `.env` local, secrets do GitHub (`CRYPTO_TELEGRAM_BOT_TOKEN`/`CRYPTO_TELEGRAM_CHAT_ID` —
-**prefixados com `CRYPTO_`** porque os secrets são por repositório, não por workflow, e
-`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` sem prefixo já existem no repo pro bot de apostas; olhar
-`.github/workflows/crypto_daytrade.yml` pra ver o mapeamento exato secret→env var). O workflow em si já
-existe (criado junto com o scaffold, ao contrário do bot de apostas onde eu só descobri um workflow
-pré-existente). Nenhum teste de ponta a ponta com envio real pro Telegram ainda — só a parte de dados da
-Binance foi validada com API real.
-
-Pendência conhecida (decisão consciente, não bug): sem checagem de segurança on-chain (liquidez travada,
-concentração de holders, contrato auditado) — usa só as tags de risco que a própria Binance aplica. Ver
-"Decisões já tomadas" acima.
+**Ainda pendente**: GitHub Actions (secrets `CRYPTO_TELEGRAM_BOT_TOKEN`/`CRYPTO_TELEGRAM_CHAT_ID`) — o
+workflow já existe (`crypto_daytrade.yml`), só falta configurar os secrets e rodar uma vez lá pra confirmar
+o pipeline completo (igual foi feito no bot de apostas).

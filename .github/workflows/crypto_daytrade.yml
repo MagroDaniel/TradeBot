@@ -1,9 +1,9 @@
-name: Crypto Daytrade — Novas Listagens Binance
+name: Crypto Daytrade — Sinais Técnicos Binance
 
 on:
   schedule:
-    # A cada 15 minutos — cripto lista a qualquer hora, diferente do bot de apostas (que só
-    # roda 1x/dia porque jogo tem horário certo).
+    # A cada 15 minutos — cripto lista/se move a qualquer hora, diferente do bot de apostas
+    # (que só roda 1x/dia porque jogo tem horário certo).
     - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  check-listings:
+  scan-signals:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -25,16 +25,16 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Checar anúncios novos de listagem
+      - name: Resolver sinais abertos e escanear por sinal novo
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.CRYPTO_TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.CRYPTO_TELEGRAM_CHAT_ID }}
         run: python main.py
 
-      - name: Salvar anúncios já vistos
+      - name: Salvar histórico de sinais
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add storage/seen_listings.json
-          git diff --staged --quiet || git commit -m "chore: atualiza anúncios já vistos"
+          git add storage/signals.json
+          git diff --staged --quiet || git commit -m "chore: atualiza histórico de sinais"
           git push

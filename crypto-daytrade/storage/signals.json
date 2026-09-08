@@ -1,0 +1,108 @@
+{
+  "signals": [
+    {
+      "symbol": "ETHUSDT",
+      "direction": "long",
+      "entry": 2494.35,
+      "stop_loss": 2483.134695834134,
+      "target": 2516.7806083317314,
+      "rsi_value": 63.28546443906983,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 63 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:40:38.501674+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "SOLUSDT",
+      "direction": "long",
+      "entry": 103.64,
+      "stop_loss": 103.0908366864525,
+      "target": 104.73832662709499,
+      "rsi_value": 60.57766705416049,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 61 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:40:55.099091+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "ZECUSDT",
+      "direction": "long",
+      "entry": 1138.21,
+      "stop_loss": 1123.721988032411,
+      "target": 1167.1860239351781,
+      "rsi_value": 57.203756827374775,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 57 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:41:11.717185+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "XRPUSDT",
+      "direction": "long",
+      "entry": 1.3991,
+      "stop_loss": 1.3918953490919856,
+      "target": 1.4135093018160287,
+      "rsi_value": 62.08480600254245,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 62 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:41:28.309202+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "SUIUSDT",
+      "direction": "long",
+      "entry": 0.8281,
+      "stop_loss": 0.818288728144736,
+      "target": 0.8477225437105279,
+      "rsi_value": 60.109892125232456,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 60 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:41:45.452148+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "AVAXUSDT",
+      "direction": "long",
+      "entry": 8.103,
+      "stop_loss": 8.060227677313922,
+      "target": 8.188544645372156,
+      "rsi_value": 60.82006908813363,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 61 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:42:05.416544+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "LINKUSDT",
+      "direction": "long",
+      "entry": 12.734,
+      "stop_loss": 12.645788164003129,
+      "target": 12.910423671993742,
+      "rsi_value": 57.002956179859105,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 57 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:42:23.127574+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "ADAUSDT",
+      "direction": "long",
+      "entry": 0.2199,
+      "stop_loss": 0.2179546449674486,
+      "target": 0.22379071006510284,
+      "rsi_value": 60.34006131841539,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 60 (não sobrecomprado)",
+      "opened_at": "2026-09-08T09:42:25.850395+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    }
+  ]
+}

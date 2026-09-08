@@ -1,4 +1,4 @@
-"""Configurações centrais do bot de análise de novas listagens na Binance.
+"""Configurações centrais do bot de sinais técnicos (Binance).
 
 Todas as credenciais vêm de variáveis de ambiente (nunca hardcoded). Use um arquivo .env
 local (baseado em .env.example) + python-dotenv, ou configure as variáveis diretamente no
@@ -25,12 +25,12 @@ def _get_env(name: str, default: str | None = None, required: bool = False) -> s
 TELEGRAM_BOT_TOKEN = _get_env("TELEGRAM_BOT_TOKEN", required=True)
 TELEGRAM_CHAT_ID = _get_env("TELEGRAM_CHAT_ID", required=True)
 
-# --- Fonte de dados ---
-# catalogId=48 é o usado hoje pelo site da Binance pra "New Cryptocurrency Listing" — não é
-# uma API oficialmente documentada (é a mesma que o site usa internamente), pode mudar sem
-# aviso. Se o bot parar de achar anúncios novos, esse é o primeiro lugar a checar.
-BINANCE_ANNOUNCEMENTS_CATALOG_ID = _get_env("BINANCE_ANNOUNCEMENTS_CATALOG_ID", default="48")
-BINANCE_ANNOUNCEMENTS_PAGE_SIZE = int(_get_env("BINANCE_ANNOUNCEMENTS_PAGE_SIZE", default="20"))
+# --- Escaneamento ---
+TOP_SYMBOLS_COUNT = int(_get_env("TOP_SYMBOLS_COUNT", default="25"))  # top N por volume 24h
+TIMEFRAME = _get_env("TIMEFRAME", default="15m")  # intervalo dos candles (day trade)
+# Sinal aberto que não bate alvo nem stop dentro desse prazo é marcado "expirado" — evita
+# ficar rastreando um sinal indefinidamente.
+SIGNAL_EXPIRY_HOURS = float(_get_env("SIGNAL_EXPIRY_HOURS", default="24"))
 
 # --- Armazenamento ---
-STORAGE_PATH = _get_env("STORAGE_PATH", default="storage/seen_listings.json")
+STORAGE_PATH = _get_env("STORAGE_PATH", default="storage/signals.json")

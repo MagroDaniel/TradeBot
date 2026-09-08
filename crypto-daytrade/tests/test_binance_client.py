@@ -14,68 +14,93 @@ class _FakeResponse:
         return self._payload
 
 
-def test_parses_ticker_from_title(monkeypatch):
-    payload = {
-        "data": {
-            "articles": [
-                {"id": 283840, "title": "Binance Will List MarsCoin (MARSCOIN) with Seed Tag Applied"},
-                {"id": 283773, "title": "Binance Futures Will Launch Multiple TradFi Perpetual Contracts"},
-            ]
-        }
-    }
+def test_get_top_symbols_by_volume_sorts_descending(monkeypatch):
+    payload = [
+        {"symbol": "BTCUSDT", "quoteVolume": "1000"},
+        {"symbol": "ETHUSDT", "quoteVolume": "5000"},
+        {"symbol": "ADAUSDT", "quoteVolume": "2000"},
+    ]
     monkeypatch.setattr(
-        "data.binance_client.requests.get", lambda url, params, timeout: _FakeResponse(200, payload)
+        "data.binance_client.requests.get", lambda url, timeout: _FakeResponse(200, payload)
     )
 
-    announcements = BinanceClient().get_new_listing_announcements(catalog_id="48")
+    symbols = BinanceClient().get_top_symbols_by_volume(limit=25)
 
-    assert len(announcements) == 2
-    assert announcements[0].article_id == 283840
-    assert announcements[0].ticker == "MARSCOIN"
-    assert announcements[1].ticker is None  # título sem parênteses de ticker
+    assert symbols == ["ETHUSDT", "ADAUSDT", "BTCUSDT"]
 
 
-def test_find_trading_usdt_pair_returns_symbol_when_trading(monkeypatch):
-    payload = {"symbols": [{"symbol": "FOOUSDT", "status": "TRADING"}]}
+def test_get_top_symbols_by_volume_filters_other_quote_assets(monkeypatch):
+    payload = [
+        {"symbol": "BTCUSDT", "quoteVolume": "1000"},
+        {"symbol": "BTCBUSD", "quoteVolume": "9999"},  # cotado em BUSD, não USDT
+    ]
     monkeypatch.setattr(
-        "data.binance_client.requests.get", lambda url, params, timeout: _FakeResponse(200, payload)
+        "data.binance_client.requests.get", lambda url, timeout: _FakeResponse(200, payload)
     )
 
-    symbol = BinanceClient().find_trading_usdt_pair("FOO")
+    symbols = BinanceClient().get_top_symbols_by_volume(quote_asset="USDT", limit=25)
 
-    assert symbol == "FOOUSDT"
+    assert symbols == ["BTCUSDT"]
 
 
-def test_find_trading_usdt_pair_returns_none_when_not_trading(monkeypatch):
-    payload = {"symbols": [{"symbol": "FOOUSDT", "status": "BREAK"}]}
+def test_get_top_symbols_by_volume_excludes_stablecoins(monkeypatch):
+    payload = [
+        {"symbol": "USDCUSDT", "quoteVolume": "999999"},  # volume alto, mas é stablecoin
+        {"symbol": "BTCUSDT", "quoteVolume": "1000"},
+    ]
     monkeypatch.setattr(
-        "data.binance_client.requests.get", lambda url, params, timeout: _FakeResponse(200, payload)
+        "data.binance_client.requests.get", lambda url, timeout: _FakeResponse(200, payload)
     )
 
-    assert BinanceClient().find_trading_usdt_pair("FOO") is None
+    symbols = BinanceClient().get_top_symbols_by_volume(limit=25)
+
+    assert "USDCUSDT" not in symbols
+    assert symbols == ["BTCUSDT"]
 
 
-def test_find_trading_usdt_pair_returns_none_when_symbol_does_not_exist(monkeypatch):
+def test_get_top_symbols_by_volume_respects_limit(monkeypatch):
+    payload = [{"symbol": f"COIN{i}USDT", "quoteVolume": str(i)} for i in range(10)]
+    monkeypatch.setattr(
+        "data.binance_client.requests.get", lambda url, timeout: _FakeResponse(200, payload)
+    )
+
+    symbols = BinanceClient().get_top_symbols_by_volume(limit=3)
+
+    assert len(symbols) == 3
+
+
+def test_get_klines_parses_candles(monkeypatch):
+    raw = [[1788857100000, "100.0", "105.0", "95.0", "102.0", "50.0", 0, "0", 0, "0", "0", "0"]]
     monkeypatch.setattr(
         "data.binance_client.requests.get",
-        lambda url, params, timeout: _FakeResponse(400, {"code": -1121, "msg": "Invalid symbol."}),
+        lambda url, params, timeout: _FakeResponse(200, raw),
     )
 
-    assert BinanceClient().find_trading_usdt_pair("NAOEXISTE") is None
+    candles = BinanceClient().get_klines("BTCUSDT", interval="15m", limit=1)
+
+    assert len(candles) == 1
+    c = candles[0]
+    assert c.open_time_ms == 1788857100000
+    assert c.open == 100.0
+    assert c.high == 105.0
+    assert c.low == 95.0
+    assert c.close == 102.0
+    assert c.volume == 50.0
 
 
-def test_get_24hr_ticker_returns_none_on_error(monkeypatch):
+def test_get_current_price_returns_none_on_error(monkeypatch):
     monkeypatch.setattr(
-        "data.binance_client.requests.get", lambda url, params, timeout: _FakeResponse(400, {})
+        "data.binance_client.requests.get",
+        lambda url, params, timeout: _FakeResponse(400, {}),
     )
 
-    assert BinanceClient().get_24hr_ticker("FOOUSDT") is None
+    assert BinanceClient().get_current_price("NAOEXISTE") is None
 
 
-def test_get_24hr_ticker_returns_payload_on_success(monkeypatch):
-    payload = {"priceChangePercent": "10.0", "quoteVolume": "500"}
+def test_get_current_price_returns_value_on_success(monkeypatch):
     monkeypatch.setattr(
-        "data.binance_client.requests.get", lambda url, params, timeout: _FakeResponse(200, payload)
+        "data.binance_client.requests.get",
+        lambda url, params, timeout: _FakeResponse(200, {"price": "102.5"}),
     )
 
-    assert BinanceClient().get_24hr_ticker("FOOUSDT") == payload
+    assert BinanceClient().get_current_price("BTCUSDT") == 102.5

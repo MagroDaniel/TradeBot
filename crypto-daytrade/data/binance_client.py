@@ -1,88 +1,77 @@
-"""Cliente para APIs públicas da Binance — nenhuma delas exige chave de API.
-
-- `/api/v3/*` (`MARKET_BASE_URL`) é a API pública de mercado, oficialmente documentada.
-- O feed de anúncios (`ANNOUNCEMENTS_URL`) é o endpoint que o próprio site da Binance usa
-  internamente pra listar comunicados — **não é uma API oficialmente documentada/suportada**,
-  pode mudar de formato ou parar de funcionar sem aviso. Se o bot parar de achar anúncios
-  novos, confira se `catalogId=48` ainda corresponde a "New Cryptocurrency Listing"
-  (confirmado manualmente em 2026-09; testado batendo o retorno contra o site).
+"""Cliente para a API pública de mercado da Binance (`/api/v3/*`) — oficialmente documentada,
+não exige chave de API. Usada pra achar os pares de maior volume e buscar candles (klines)
+pra calcular os indicadores técnicos.
 """
 from __future__ import annotations
 
-import logging
-import re
 from dataclasses import dataclass
-from typing import Any
 
 import requests
 
-logger = logging.getLogger(__name__)
+BASE_URL = "https://api.binance.com/api/v3"
 
-MARKET_BASE_URL = "https://api.binance.com/api/v3"
-ANNOUNCEMENTS_URL = "https://www.binance.com/bapi/composite/v1/public/cms/article/catalog/list/query"
-
-# Extrai o ticker entre parênteses do título do anúncio, ex:
-# "Binance Will List MarsCoin (MARSCOIN) with Seed Tag Applied" -> "MARSCOIN"
-_TITLE_TICKER_RE = re.compile(r"\(([A-Z0-9]{2,15})\)")
+# Stablecoins pareadas com USDT (ex: USDCUSDT) têm volume alto mas preço travado em ~1.00 —
+# nunca geram cruzamento de médias de verdade, só desperdiçam uma chamada de klines por
+# execução. Filtradas na origem em vez de deixar o gerador de sinal descartar depois.
+_STABLECOIN_BASES = {"USDC", "USD1", "FDUSD", "TUSD", "DAI", "RLUSD", "BUSD", "USDP", "GUSD"}
 
 
 @dataclass(frozen=True)
-class Announcement:
-    article_id: int
-    title: str
-    ticker: str | None  # extraído do título via regex — pode não achar em títulos atípicos
+class Candle:
+    open_time_ms: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
 
 
 class BinanceClient:
     def __init__(self, timeout: int = 15) -> None:
         self.timeout = timeout
 
-    def get_new_listing_announcements(
-        self, catalog_id: str, page_size: int = 20
-    ) -> list[Announcement]:
-        """Últimos anúncios da categoria de novas listagens, mais recente primeiro (é a
-        ordem que a Binance já devolve)."""
+    def get_top_symbols_by_volume(self, quote_asset: str = "USDT", limit: int = 25) -> list[str]:
+        """Pares {X}{quote_asset} com maior volume nas últimas 24h — usa uma chamada só
+        (ticker/24hr sem `symbol` devolve todos os pares), sem precisar de exchangeInfo."""
+        response = requests.get(f"{BASE_URL}/ticker/24hr", timeout=self.timeout)
+        response.raise_for_status()
+        tickers = response.json()
+
+        candidates = [
+            t
+            for t in tickers
+            if t["symbol"].endswith(quote_asset)
+            and t["symbol"][: -len(quote_asset)] not in _STABLECOIN_BASES
+        ]
+        candidates.sort(key=lambda t: float(t["quoteVolume"]), reverse=True)
+        return [t["symbol"] for t in candidates[:limit]]
+
+    def get_klines(self, symbol: str, interval: str = "15m", limit: int = 100) -> list[Candle]:
+        """Candles mais recentes primeiro na ordem que a Binance devolve (mais antigo
+        primeiro) — não inverte, quem usa decide a ordem que precisa."""
         response = requests.get(
-            ANNOUNCEMENTS_URL,
-            params={"catalogId": catalog_id, "pageNo": 1, "pageSize": page_size},
+            f"{BASE_URL}/klines",
+            params={"symbol": symbol, "interval": interval, "limit": limit},
             timeout=self.timeout,
         )
         response.raise_for_status()
-        articles = response.json().get("data", {}).get("articles", []) or []
-
-        announcements = []
-        for article in articles:
-            title = article.get("title", "")
-            match = _TITLE_TICKER_RE.search(title)
-            announcements.append(
-                Announcement(
-                    article_id=article["id"],
-                    title=title,
-                    ticker=match.group(1) if match else None,
-                )
+        raw = response.json()
+        return [
+            Candle(
+                open_time_ms=c[0],
+                open=float(c[1]),
+                high=float(c[2]),
+                low=float(c[3]),
+                close=float(c[4]),
+                volume=float(c[5]),
             )
-        return announcements
+            for c in raw
+        ]
 
-    def find_trading_usdt_pair(self, ticker: str) -> str | None:
-        """Confere se {ticker}USDT já existe e está operando (status TRADING) na Binance —
-        None se ainda não foi listado, se o símbolo não existe, ou está em pausa (BREAK)."""
-        symbol = f"{ticker}USDT"
+    def get_current_price(self, symbol: str) -> float | None:
         response = requests.get(
-            f"{MARKET_BASE_URL}/exchangeInfo", params={"symbol": symbol}, timeout=self.timeout
-        )
-        if response.status_code != 200:
-            return None  # símbolo inválido/inexistente — Binance responde 400 nesse caso
-        symbols = response.json().get("symbols", [])
-        if symbols and symbols[0].get("status") == "TRADING":
-            return symbol
-        return None
-
-    def get_24hr_ticker(self, symbol: str) -> dict[str, Any] | None:
-        """Estatísticas de preço/volume das últimas 24h — usado como sinal de momentum
-        (pouco depois de listar, a janela de 24h é essencialmente "desde a listagem")."""
-        response = requests.get(
-            f"{MARKET_BASE_URL}/ticker/24hr", params={"symbol": symbol}, timeout=self.timeout
+            f"{BASE_URL}/ticker/price", params={"symbol": symbol}, timeout=self.timeout
         )
         if response.status_code != 200:
             return None
-        return response.json()
+        return float(response.json()["price"])
