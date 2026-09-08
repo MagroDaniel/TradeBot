@@ -4,7 +4,7 @@ depois escaneia os pares de maior volume em busca de sinal técnico novo.
 
 Ordem de execução — relatório, depois resolver, depois escanear — é deliberada, mesmo
 raciocínio do bot de apostas (resultado de ontem antes dos picks de hoje): fecha o que já
-aconteceu antes de gerar coisa nova. Pensado pra rodar a cada 15-30 min via cron/GitHub
+aconteceu antes de gerar coisa nova. Pensado pra rodar a cada 10 min via cron/GitHub
 Actions — cripto não tem "horário de jogo" como futebol, mas o relatório diário só sai 1x/dia
 mesmo assim (ver `send_daily_report_if_needed`).
 """
@@ -49,7 +49,7 @@ def send_daily_report_if_needed(store: SignalsStore, notifier: TelegramNotifier)
     Mesma ordem do bot de apostas: resultado fechado antes de qualquer coisa nova."""
     today = today_brt().isoformat()
     if store.get_last_report_date() == today:
-        return  # já mandou hoje, não repete a cada execução de 15 em 15 min
+        return  # já mandou hoje, não repete a cada execução de 10 em 10 min
 
     yesterday = today_brt() - timedelta(days=1)
     todays_records = [

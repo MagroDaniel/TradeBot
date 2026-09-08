@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## O que é isto
 
-Um bot que roda a cada 15-30 min (README, comentários e mensagens do Telegram — tudo em pt-BR) e escaneia
+Um bot que roda a cada 10 min (README, comentários e mensagens do Telegram — tudo em pt-BR) e escaneia
 os pares de maior volume na Binance procurando sinal técnico (cruzamento de EMA9/EMA21 confirmado por
 RSI14), mandando entrada/stop loss/alvo pro Telegram — nunca alavancagem. Ele **nunca opera nada sozinho**
 — só alerta; a decisão e a execução ficam com o humano. Projeto irmão de `../sports-betting/`, mesma
@@ -52,7 +52,7 @@ já tomadas" abaixo). Se encontrar código ou histórico de commit mencionando "
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Roda uma checagem (pensado pra rodar via cron a cada 15-30 min, não continuamente)
+# Roda uma checagem (pensado pra rodar via cron a cada 10 min, não continuamente)
 python main.py
 
 # Testes (sem chamadas de rede, sem precisar de credenciais)
@@ -73,7 +73,7 @@ interno):
 1. **`send_daily_report_if_needed()`** — compara `today_brt()` (ver `data/schedule.py`) contra
    `store.get_last_report_date()`; se já bateu meia-noite BRT desde o último relatório, resume (via
    `analysis/performance.summarize`) todos os sinais cujo `closed_at` cai no dia anterior em BRT
-   (`date_brt`) e manda pro Telegram. Só dispara 1x/dia mesmo rodando a cada 15 min — a checagem de data é
+   (`date_brt`) e manda pro Telegram. Só dispara 1x/dia mesmo rodando a cada 10 min — a checagem de data é
    o que evita repetir. Se o envio falhar, **não** marca `last_report_date` como enviado — tenta de novo na
    próxima execução (mesmo padrão de "só marca sucesso depois de confirmar" do resto do projeto).
 2. **`resolve_open_signals()`** — pra cada sinal com `status="open"` em `SignalsStore`, busca candles desde
@@ -154,11 +154,19 @@ tomadas" acima.
 
 ### Automação
 
-`.github/workflows/crypto_daytrade.yml` (raiz do repo `TradeBot`) — cron a cada 15 min +
+`.github/workflows/crypto_daytrade.yml` (raiz do repo `TradeBot`) — cron a cada 10 min +
 `workflow_dispatch`. Secrets **prefixados `CRYPTO_`** (`CRYPTO_TELEGRAM_BOT_TOKEN`,
 `CRYPTO_TELEGRAM_CHAT_ID`) porque secrets do GitHub Actions são por repositório, não por workflow, e os
 nomes sem prefixo já pertencem ao bot de apostas no mesmo repo. Commita `storage/signals.json` de volta a
 cada run (runners são efêmeros).
+
+**Frequência e minutos do GitHub Actions**: rodava `*/15 * * * *` originalmente — 96 execuções/dia estoura
+o free tier de 2.000 min/mês de repositório privado sozinho, só pelo arredondamento de minutos do GitHub
+(cada run conta como no mínimo 1 min, mesmo rápido). Cogitado reduzir frequência, mas o usuário decidiu
+tornar o repositório `TradeBot` **público** em vez disso (repositório público tem minutos ilimitados) —
+antes disso, auditei todo o histórico do Git (`git log --all -p`) atrás de credencial commitada por engano
+e não achei nada (nem `.env`, nem token, nem chave de API). Cron final: `*/10 * * * *`. Se o repo algum dia
+voltar a ser privado, reconsidere a frequência antes de reativar o workflow como está.
 
 ## Status atual
 

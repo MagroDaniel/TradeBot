@@ -2,9 +2,12 @@ name: Crypto Daytrade — Sinais Técnicos Binance
 
 on:
   schedule:
-    # A cada 15 minutos — cripto lista/se move a qualquer hora, diferente do bot de apostas
-    # (que só roda 1x/dia porque jogo tem horário certo).
-    - cron: "*/15 * * * *"
+    # A cada 10 minutos — cripto se move a qualquer hora, diferente do bot de apostas (que só
+    # roda 1x/dia porque jogo tem horário certo). Repositório TradeBot é público, então não
+    # tem limite de minutos do GitHub Actions (só repositório privado tem o teto de 2.000
+    # min/mês do free tier) — a frequência aqui é só uma escolha de produto, não uma
+    # restrição técnica.
+    - cron: "*/10 * * * *"
   workflow_dispatch: {}
 
 permissions:

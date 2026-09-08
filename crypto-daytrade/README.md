@@ -1,6 +1,6 @@
 # Bot de Sinais Técnicos — Futuros/Spot Binance
 
-Bot que roda **a cada 15-30 min** e escaneia os pares de maior volume na Binance em busca de
+Bot que roda **a cada 10 min** e escaneia os pares de maior volume na Binance em busca de
 sinal técnico (cruzamento de médias móveis confirmado por RSI), mandando pro Telegram
 **entrada, stop loss e alvo** — sem sugerir alavancagem. Ele **não opera nada sozinho** — só
 analisa e alerta. A decisão e execução ficam com você.
@@ -26,7 +26,7 @@ esses são exatamente os sinais de canal predatório que motivaram esse aviso.
 1. **Relatório do dia anterior** — 1x por dia (na primeira execução depois da meia-noite
    BRT), manda um resumo de todos os sinais resolvidos no dia anterior: quantos bateram
    alvo, quantos bateram stop, quantos expiraram, e a taxa de acerto real (sem filtrar
-   perda). Não repete a cada execução de 15 em 15 min.
+   perda). Não repete a cada execução de 10 em 10 min.
 2. **Resolve sinais abertos** — pra cada sinal ainda em aberto, busca os candles desde que
    foi emitido e confere se o preço bateu no stop ou no alvo primeiro (ou expirou sem bater
    nenhum dos dois dentro de `SIGNAL_EXPIRY_HOURS`). Manda o resultado real pro Telegram.
@@ -95,8 +95,14 @@ credenciais.
 ## Automação (GitHub Actions)
 
 Workflow em `../.github/workflows/crypto_daytrade.yml` (raiz do repositório Git) — roda a
-cada 15 minutos e commita `storage/signals.json` de volta a cada execução (histórico
+cada 10 minutos e commita `storage/signals.json` de volta a cada execução (histórico
 persiste entre runs, já que os runners são efêmeros).
+
+**Sobre a frequência**: o repositório `TradeBot` é público — repositório público tem minutos
+de GitHub Actions **ilimitados**, então rodar a cada 10 min não tem custo. Se algum dia o
+repo voltar a ser privado, o free tier é de 2.000 min/mês; nesse caso vale reconsiderar a
+frequência (96 execuções/dia de 15 em 15 min já estoura o limite sozinho, mesmo com runs
+rápidos, por causa do arredondamento de minutos do GitHub).
 
 **Atenção**: os secrets do GitHub Actions são por repositório, não por workflow — como este
 repo já tem `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` configurados pro bot de apostas, os
@@ -107,7 +113,7 @@ Para ativar:
 2. Adicione os secrets `CRYPTO_TELEGRAM_BOT_TOKEN` e `CRYPTO_TELEGRAM_CHAT_ID`.
 3. Em **Settings → Actions → General → Workflow permissions**, confirme "Read and write
    permissions".
-4. Pronto — o workflow já roda sozinho a cada 15 min (ou dispare manualmente pela aba
+4. Pronto — o workflow já roda sozinho a cada 10 min (ou dispare manualmente pela aba
    Actions, via "Run workflow").
 
 ## Estrutura
