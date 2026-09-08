@@ -1,0 +1,40 @@
+name: Crypto Daytrade — Novas Listagens Binance
+
+on:
+  schedule:
+    # A cada 15 minutos — cripto lista a qualquer hora, diferente do bot de apostas (que só
+    # roda 1x/dia porque jogo tem horário certo).
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  check-listings:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crypto-daytrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Checar anúncios novos de listagem
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.CRYPTO_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.CRYPTO_TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Salvar anúncios já vistos
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add storage/seen_listings.json
+          git diff --staged --quiet || git commit -m "chore: atualiza anúncios já vistos"
+          git push
