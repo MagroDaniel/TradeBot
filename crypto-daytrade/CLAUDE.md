@@ -168,6 +168,29 @@ antes disso, auditei todo o histórico do Git (`git log --all -p`) atrás de cre
 e não achei nada (nem `.env`, nem token, nem chave de API). Cron final: `*/10 * * * *`. Se o repo algum dia
 voltar a ser privado, reconsidere a frequência antes de reativar o workflow como está.
 
+**O evento `schedule` do GitHub Actions não é confiável pra cron sub-horário (descoberto 2026-09-08)**:
+mesmo com `*/10 * * * *` configurado corretamente (YAML válido, no branch default), medindo os runs reais
+pela API (`GET /repos/MagroDaniel/TradeBot/actions/workflows/crypto_daytrade.yml/runs`) o evento `schedule`
+só disparou 3x em ~11h de bot ativo, com ~3h de intervalo entre disparos — nunca a cada 10 min. Todos os
+runs "extras" que apareciam no meio eram `workflow_dispatch` manual (o usuário clicando "Run workflow"),
+não o cron. Isso é comportamento documentado/conhecido do GitHub: o evento `schedule` passa por uma fila de
+agendamento compartilhada que não garante execução pontual pra frequências mais altas que ~1h, especialmente
+em repositórios de baixa atividade — não é bug deste YAML nem falta de minutos (repo é público).
+
+**Solução adotada**: um cron externo gratuito ([cron-job.org](https://cron-job.org)) chama
+`POST /repos/MagroDaniel/TradeBot/actions/workflows/crypto_daytrade.yml/dispatches` a cada 10 min, com
+`Authorization: Bearer <PAT>` (fine-grained personal access token, escopo só `Actions: read and write`, só
+no repo `TradeBot`) e corpo `{"ref": "claude/daytrade-analysis-bot-u1uo4q"}` (branch default do repo).
+Isso dispara o evento `workflow_dispatch`, que **não** passa pela fila do `schedule` e roda quase
+instantaneamente (é por isso que os disparos manuais sempre funcionaram enquanto o cron nativo falhava). O
+PAT fica cadastrado só no cron-job.org, nunca commitado no repo.
+
+O bloco `schedule:` foi **removido** do workflow (não ficou como fallback) — decisão explícita do usuário
+de manter uma única fonte de agendamento (`workflow_dispatch` via cron-job.org), evitando ambiguidade sobre
+qual gatilho disparou cada run. Se o cron-job.org sair do ar, o bot simplesmente para de rodar
+automaticamente até o serviço voltar ou até alguém disparar manualmente pela aba Actions — não há
+fallback nativo do GitHub configurado.
+
 ## Status atual
 
 Reescrito do zero em 2026-09-08 (pivô de "listagens novas" pra "sinais técnicos"), testado de ponta a ponta

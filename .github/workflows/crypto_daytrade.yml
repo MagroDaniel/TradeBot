@@ -1,13 +1,12 @@
 name: Crypto Daytrade — Sinais Técnicos Binance
 
 on:
-  schedule:
-    # A cada 10 minutos — cripto se move a qualquer hora, diferente do bot de apostas (que só
-    # roda 1x/dia porque jogo tem horário certo). Repositório TradeBot é público, então não
-    # tem limite de minutos do GitHub Actions (só repositório privado tem o teto de 2.000
-    # min/mês do free tier) — a frequência aqui é só uma escolha de produto, não uma
-    # restrição técnica.
-    - cron: "*/10 * * * *"
+  # SEM `schedule:` de propósito (removido em 2026-09-08). O evento `schedule` do GitHub
+  # Actions não garante frequência sub-horária — medido na prática com `*/10 * * * *`
+  # configurado, ele só disparou de verdade 3x em ~11h (intervalos de ~3h, não 10 min); é fila
+  # de agendamento do GitHub, não bug deste YAML. A cadência real de 10 min vem de um cron
+  # externo (cron-job.org) chamando `workflow_dispatch` via API a cada 10 min — ver seção
+  # "Automação" do CLAUDE.md. Não readicione `schedule:` sem revisitar essa decisão.
   workflow_dispatch: {}
 
 permissions:
