@@ -5,25 +5,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## O que é isto
 
 Um bot que roda 1x por dia (README, comentários e mensagens do Telegram — tudo em pt-BR) e analisa odds de
-apostas de futebol, encontra apostas +EV ("de valor") usando um modelo de Poisson calibrado com resultados
-históricos, e manda os picks pelo Telegram. **Ele nunca aposta sozinho** — só alerta; a decisão e a
-execução ficam com o humano.
+apostas de futebol em 9 competições (Brasileirão + 5 ligas europeias + 3 copas UEFA), encontra apostas +EV
+("de valor") só entre os jogos que acontecem **hoje** (em horário de Brasília) usando um modelo de Poisson
+calibrado por competição, e manda os picks pelo Telegram. **Ele nunca aposta sozinho** — só alerta; a
+decisão e a execução ficam com o humano.
 
 ## Decisões já tomadas (não reabrir sem motivo)
 
 São escolhas de produto deliberadas, não descuidos — reabrir a discussão exige um motivo declarado:
 
-- **1x/dia, de manhã**, sem polling contínuo — motivado pelo orçamento do free tier da The Odds API (ver
-  "Fronteira de acesso a dados" abaixo).
+- **1x/dia, às 7h BRT**, sem polling contínuo — motivado pelo orçamento do free tier da The Odds API (ver
+  "Fronteira de acesso a dados" abaixo). Mesmo com 9 competições + mercados adicionais por evento, uma
+  execução completa fica bem abaixo do limite mensal.
 - **Somente análise/alerta, sem execução automática** — o bot nunca deve apostar sozinho.
+- **Só jogos de hoje** (`data/schedule.py::is_same_day_brt`) — a Odds API devolve todos os jogos futuros da
+  liga numa chamada só; sem esse filtro o bot mostrava jogos de dias futuros como se fossem de hoje (bug
+  reportado pelo usuário, corrigido nesta sessão).
+- **Um modelo calibrado por competição**, nunca um modelo só pra várias ligas — médias de gols e pools de
+  times são incompatíveis entre ligas (ver "Modelo" e "Fronteira de acesso a dados" abaixo).
 - **Poisson simplificado (Maher 1982), não Dixon-Coles completo** — a correção para placares baixos é uma
   melhoria conhecida e propositalmente adiada (ver "Modelo" abaixo).
-- **Dados históricos de calibração vêm de CSV** (não de uma API própria), mantidos separados do feed de
-  odds ao vivo (The Odds API) — as duas fontes nunca devem se fundir num único cliente. **Atenção:** o
-  football-data.co.uk (citado no README original) **não cobre o Brasileirão**, só ligas europeias — para
-  o `SPORT_KEYS` padrão (`soccer_brazil_campeonato`) a fonte é o
-  [adaoduque/Brasileirao_Dataset](https://github.com/adaoduque/Brasileirao_Dataset) no GitHub. O
-  `historical_loader.py` detecta automaticamente qual dos dois formatos de coluna está no CSV.
+- **Dados históricos de calibração vêm de CSV** (não de uma API própria), um por competição, mantidos
+  separados do feed de odds ao vivo (The Odds API) — as duas fontes nunca devem se fundir num único cliente.
 - **Armazenamento em JSON simples**, pensado para ser trocado por SQLite/Postgres só se o volume de
   histórico exigir — não "conserte" isso preventivamente.
 
@@ -47,24 +50,32 @@ As credenciais são variáveis de ambiente obrigatórias (`ODDS_API_KEY`, `TELEG
 `TELEGRAM_CHAT_ID`), carregadas via `.env` (ver `.env.example`) através do `config.py`. O `config.py`
 levanta `RuntimeError` na importação se elas estiverem faltando — ou seja, o `main.py` não pode ser
 importado sem um `.env` válido, mas os módulos em `model/`, `analysis/`, `data/historical_loader.py`,
-`storage/` e `backtest/` não têm essa dependência, por isso a suíte de testes cobre só esses.
+`data/schedule.py`, `data/team_aliases.py`, `data/odds_client.py`, `alerts/telegram_notifier.py`,
+`storage/` e `backtest/` não têm essa dependência, por isso a suíte de testes cobre todos esses (mockando
+`requests` nos módulos com I/O de rede, sem precisar de credenciais reais).
 
 ## Arquitetura
 
 O pipeline em `main.py::main()` roda duas fases em ordem fixa a cada execução, ambas usando a mesma
 instância de `OddsAPIClient`:
 
-1. **`resolve_yesterday()`** — carrega os picks salvos de ontem via `PicksStore`, busca os placares para
-   os sport keys relevantes, marca cada pick como `"green"`/`"red"` recalculando o resultado a partir do
-   placar bruto (ver `_pick_won`), grava os resultados de volta e envia o resumo pelo Telegram.
-2. **`build_todays_picks()`** — recalibra um `PoissonModel` do zero a partir do CSV histórico a cada
-   execução (não há modelo persistido/cacheado), busca as odds de hoje por sport key e avalia cada evento.
+1. **`resolve_yesterday()`** — carrega os picks salvos de ontem (data calculada em BRT, ver
+   `data/schedule.py::today_brt`) via `PicksStore`, busca os placares para os sport keys relevantes, marca
+   cada pick como `"green"`/`"red"` recalculando o resultado a partir do placar bruto (ver `_pick_won`),
+   grava os resultados de volta e envia o resumo pelo Telegram.
+2. **`_load_models()`** — calibra um `PoissonModel` por competição em `SPORT_KEYS`, a partir de
+   `HISTORICAL_DATA_DIR/{sport_key}.csv`. Competição sem CSV correspondente é pulada (log de aviso), não
+   derruba a execução das demais — não há modelo persistido/cacheado entre execuções.
+3. **`build_todays_picks()`** — para cada competição com modelo calibrado, busca as odds via
+   `OddsAPIClient.get_upcoming_odds`, filtra só os jogos de **hoje em BRT**
+   (`is_same_day_brt`), busca mercados adicionais por evento (`_with_additional_markets`, ver
+   "Fronteira de acesso a dados") e avalia cada evento.
 
 A avaliação por evento (`_evaluate_event`) é a lógica de decisão central e conecta os outros módulos:
 `PoissonModel.match_probabilities()` → compara com `_best_odds_by_selection()` (melhor preço entre as casas
-de apostas para cada uma das 5 seleções: vitória do mandante / empate / vitória do visitante / over 2.5 /
-under 2.5) → `calculate_ev()` do `ev.py` → filtra por `config.EV_THRESHOLD` → `capped_stake()` do `kelly.py`
-para o sizing → filtra stake `> 0` → gera um `Pick`.
+de apostas para cada uma das 10 seleções: vitória do mandante / empate / vitória do visitante / over 2.5 /
+under 2.5 / ambas marcam / ambas não marcam / dupla chance ×3) → `calculate_ev()` do `ev.py` → filtra por
+`config.EV_THRESHOLD` → `capped_stake()` do `kelly.py` para o sizing → filtra stake `> 0` → gera um `Pick`.
 
 Os resultados são enviados ao Telegram nesta ordem fixa (resultados de ontem, depois picks de hoje) — é uma
 decisão de produto deliberada, não incidental; preserve essa ordem se mexer no `main()`.
@@ -75,9 +86,10 @@ Abordagem simplificada de Maher (1982), precursora do Dixon-Coles (a correção 
 placares baixos está listada como não implementada no roadmap do README — não assuma que ela existe). Cada
 time recebe uma força de ataque/defesa relativa às médias da liga, calculada separadamente a partir dos
 jogos como mandante e como visitante e depois com a média entre os dois. Os gols esperados de uma partida
-vêm de `média_liga × ataque_do_atacante × defesa_do_adversário`; as probabilidades da partida são a soma
-dupla sobre uma grade de Poisson truncada (`max_goals`, padrão 8), então as probabilidades somam ~1.0 mas
-não exatamente (ver a tolerância em `test_match_probabilities_sum_to_one`). Times não vistos na calibração
+vêm de `média_liga × ataque_do_atacante × defesa_do_adversário`; `match_probabilities()` percorre uma grade
+de Poisson truncada (`max_goals`, padrão 8) uma única vez e deriva **todos** os mercados dela (1X2,
+over/under 2.5, BTTS, dupla chance) — probabilidades 1X2 somam ~1.0 mas não exatamente por causa do
+truncamento (ver a tolerância em `test_match_probabilities_sum_to_one`). Times não vistos na calibração
 histórica levantam `KeyError` — quem chama (`main.py::_evaluate_event`) captura isso por evento e pula em
 vez de derrubar a execução inteira, já que os nomes dos times na odds API e no CSV histórico precisam bater
 exatamente (ver `data/team_aliases.py` abaixo).
@@ -88,8 +100,9 @@ decaimento exponencial (peso cai pela metade a cada `half_life_days`; padrão 10
 em fase ruim atualmente (ex: Corinthians, vários títulos entre 2005-2017) inflavam demais a força estimada
 sem isso — mesmo com a ponderação, alguns EVs continuam artificialmente altos (>50%), porque o modelo ainda
 não tem nenhum sinal de forma recente de curtíssimo prazo (últimos 5-10 jogos, lesões etc.); trate EVs muito
-altos com desconfiança, não como edge real confirmado. `MatchResult.match_date` é opcional — sem data
-(`None`) o jogo entra com peso 1.0, igual ao comportamento antes dessa mudança.
+altos com desconfiança, não como edge real confirmado — isso fica mais explícito agora porque a própria
+mensagem do Telegram tem um rodapé avisando disso (ver `alerts/telegram_notifier.py` abaixo).
+`MatchResult.match_date` é opcional — sem data (`None`) o jogo entra com peso 1.0.
 
 ### Lógica financeira (`analysis/ev.py`, `analysis/kelly.py`)
 
@@ -101,65 +114,119 @@ assim, é o que permite testá-los sem mocks.
 ### Fronteira de acesso a dados
 
 `data/odds_client.py` e `data/historical_loader.py` são os únicos módulos que saem do processo (HTTP e CSV
-no filesystem, respectivamente). O `OddsAPIClient` é um wrapper fino, sem cache — cada chamada custa
-`regiões × mercados` créditos independente de quantos eventos voltam, por isso o bot foi desenhado para
-rodar 1x/dia (ver "Por que só 1x por dia?" no README). Não adicione chamadas extras sem considerar o
-orçamento de créditos do free tier (~16/dia). Os dados históricos vêm de CSV, com o formato de colunas
-detectado automaticamente (`_COLUMN_ALIASES` em `historical_loader.py`): `HomeTeam`/`AwayTeam`/`FTHG`/`FTAG`
-(football-data.co.uk, ligas europeias) ou `mandante`/`visitante`/`mandante_Placar`/`visitante_Placar`
-(adaoduque/Brasileirao_Dataset, usado para o `SPORT_KEYS` padrão); linhas malformadas são silenciosamente
-ignoradas, e um CSV com colunas de nenhum dos dois formatos levanta `ValueError`. A coluna de data
-(`Date`/`data`, também autodetectada) alimenta a ponderação temporal do modelo — ver "Modelo" acima.
+no filesystem, respectivamente).
 
-**Nomes de times (`data/team_aliases.py`)**: a Odds API e o CSV histórico usam nomenclaturas diferentes pro
-mesmo time (ex: "Botafogo" vs. "Botafogo-RJ", "Vasco da Gama" vs. "Vasco"). `TEAM_ALIASES` mapeia Odds API →
-CSV e é aplicado só na hora de consultar o modelo (`main.py::_evaluate_event`) — os nomes exibidos no
-Telegram e salvos em `Pick` continuam sendo os originais da Odds API. Times genuinamente sem histórico no
-CSV (ex: recém-promovidos à Série A) não têm solução por alias — continuam sendo pulados via `KeyError`, o
-que é o comportamento correto.
+**`OddsAPIClient`** (`data/odds_client.py`) aceita uma **lista** de chaves (`api_keys`, de
+`config.ODDS_API_KEYS` = `[ODDS_API_KEY] + ODDS_API_KEYS_EXTRA`) e troca automaticamente pra próxima quando
+uma responde 401/402/429 (crédito esgotado/limite atingido) — o índice da chave atual persiste entre
+chamadas do mesmo client (não volta pra chave 0 sozinho). Dois métodos:
+- `get_upcoming_odds(sport_key)` — em lote, `regions × markets` créditos, todos os jogos futuros da liga
+  numa chamada só (não é por jogo).
+- `get_event_odds(sport_key, event_id, markets)` — mercados adicionais (BTTS, dupla chance) **por evento**,
+  mesma fórmula de créditos mas cobrada por partida. `main.py::_with_additional_markets` só chama isso pros
+  jogos que **já passaram no filtro de hoje** (não pra todo jogo futuro retornado pela chamada em lote) —
+  é o que mantém o custo sob controle. Controlado por `config.ADDITIONAL_MARKETS` (`"none"` desativa).
+
+Não adicione chamadas extras sem considerar o orçamento de créditos do free tier (500/mês por chave). Com 9
+competições + mercados adicionais nos jogos de hoje, uma execução típica fica na faixa de 20-60+ créditos
+dependendo de quantos jogos existem no dia — ainda dá folga pra rodar 1x/dia dentro do free tier de uma
+chave só; `ODDS_API_KEYS_EXTRA` existe pra somar outra conta se isso um dia não bastar.
+
+**Dados históricos**: um CSV por competição em `HISTORICAL_DATA_DIR/{sport_key}.csv` (convenção de nome —
+`main.py::_load_models` deriva o caminho direto do sport_key, sem mapeamento explícito no config). Formato
+de colunas detectado automaticamente (`_COLUMN_ALIASES` em `historical_loader.py`):
+`HomeTeam`/`AwayTeam`/`FTHG`/`FTAG` (football-data.co.uk / xgabora/Club-Football-Match-Data, ligas
+europeias) ou `mandante`/`visitante`/`mandante_Placar`/`visitante_Placar` (adaoduque/Brasileirao_Dataset,
+Brasileirão). Coluna de data (`Date`/`data`, também autodetectada, aceita `dd/mm/yyyy`, `dd/mm/yy` e
+`yyyy-mm-dd`) alimenta a ponderação temporal do modelo. Linhas malformadas são silenciosamente ignoradas; um
+CSV com colunas de nenhum formato reconhecido levanta `ValueError`.
+
+**As 3 copas UEFA (`soccer_uefa_champs_league`, `_europa_league`, `_europa_conference_league`) compartilham
+o mesmo CSV combinado** das 5 ligas domésticas europeias (concatenação simples, sem normalizar a diferença
+de padrão de gols entre ligas) — é uma simplificação deliberada, não um modelo por-liga de verdade. Times de
+países fora dessas 5 ligas (Porto, Ajax, Celtic etc.) não têm histórico e são pulados como qualquer time sem
+dado. Ver o roadmap do README ("Normalização entre ligas") — melhoria conhecida, não implementada.
+
+**Nomes de times (`data/team_aliases.py`)**: a Odds API e os CSVs históricos usam nomenclaturas diferentes
+pro mesmo time (ex: "Botafogo" vs. "Botafogo-RJ", "Manchester United" vs. "Man United"). `TEAM_ALIASES` é um
+dict único global (nomes não colidem entre competições) mapeando Odds API → CSV, aplicado só na hora de
+consultar o modelo (`main.py::_evaluate_event`) — os nomes exibidos no Telegram e salvos em `Pick`
+continuam sendo os originais da Odds API. Times genuinamente sem histórico no CSV (recém-promovidos, ou
+clubes de ligas não cobertas) não têm solução por alias — continuam sendo pulados via `KeyError`, o que é o
+comportamento correto. **Cuidado com nomes duplicados dentro da própria fonte histórica**: o dataset
+xgabora tinha o mesmo time grafado de duas formas em temporadas diferentes (`"Nott'm Forest"` /
+`"Nottm Forest"` pro Nottingham Forest, `"M'gladbach"` / `"MGladbach"` pro Borussia Mönchengladbach) —
+isso fragmenta o histórico do time em duas chaves e já foi corrigido diretamente nos CSVs gerados; ao
+regerar esses CSVs no futuro, rode um diff de nomes parecidos (`difflib.get_close_matches`) antes de
+assumir que está limpo.
+
+### Filtro de hoje e fuso horário (`data/schedule.py`)
+
+BRT é tratado como offset fixo UTC-3 (`timezone(timedelta(hours=-3))`) — Brasil não observa horário de
+verão desde 2019, então não precisa de `zoneinfo`/`pytz`. `today_brt()` é usado tanto pra calcular "ontem"
+(`resolve_yesterday`) quanto "hoje" (`build_todays_picks`, chave de armazenamento em `PicksStore`) — antes
+dessa mudança, `main.py` usava `date.today()` implicitamente em UTC (o runner do GitHub Actions roda em
+UTC), o que só coincidia com o dia certo em BRT por sorte de horário; agora é consistente e explícito em
+todo o pipeline. `is_same_day_brt` compara o `commence_time` (ISO, UTC, formato da Odds API) convertido pra
+BRT contra uma data de referência.
+
+### Mensagens do Telegram (`alerts/telegram_notifier.py`)
+
+Agrupadas por competição e depois por jogo (`_COMPETITION_LABELS` dá nome+emoji por `sport_key`, com
+fallback genérico pra competição sem entrada no dict — não trava se `SPORT_KEYS` ganhar uma competição
+nova). `send_daily_picks` recebe `games_today` (contagem de jogos de hoje considerados, não só os que
+viraram pick) pra diferenciar "sem jogos hoje" de "teve jogo mas sem valor" na mensagem — vem de
+`build_todays_picks`, que retorna `(picks, games_today)` em vez de só a lista de picks. Mensagem de picks
+termina com um rodapé fixo (`_EV_EXPLAINER`) explicando o que EV significa e avisando que EV muito alto pode
+ser erro de modelo — reforça o aviso que já está em "Modelo" acima, agora visível pro usuário final também.
 
 ### Armazenamento (`storage/picks_store.py`)
 
-JSON simples indexado por data ISO, com listas de dataclasses `Pick` serializadas como valores. `Pick` é o
-tipo de registro compartilhado que atravessa todo o pipeline (avaliação de odds → armazenamento →
-resolução de resultado → formatação do Telegram → backtest). Ele acumula os estados "previsto" e
-"resolvido" via os campos opcionais `result`/`profit_units`, em vez de ser dividido em tipos separados —
-espere que essa dataclass seja lida e escrita bem além de `storage/`. O README deixa claro que isso é
-propositalmente simples e deve ser trocado por SQLite/Postgres se o histórico crescer.
+JSON simples indexado por data ISO (calculada em BRT — ver acima), com listas de dataclasses `Pick`
+serializadas como valores. `Pick` é o tipo de registro compartilhado que atravessa todo o pipeline
+(avaliação de odds → armazenamento → resolução de resultado → formatação do Telegram → backtest). Ele
+acumula os estados "previsto" e "resolvido" via os campos opcionais `result`/`profit_units`, em vez de ser
+dividido em tipos separados — expect que essa dataclass seja lida e escrita bem além de `storage/`. O README
+deixa claro que isso é propositalmente simples e deve ser trocado por SQLite/Postgres se o histórico crescer.
 
 ### Automação
 
 **Atenção à raiz do repo**: `sports-betting/` é uma subpasta dentro do repositório Git `TradeBot` (o
 remote é `MagroDaniel/TradeBot`) — não é a raiz. `.github/workflows/daily_picks.yml` fica na raiz do repo
 (`TradeBot/.github/...`), não dentro de `sports-betting/.github/...`; procure lá se for mexer nele. O
-workflow já existe e roda: cron diário (11h UTC = 08h BRT) + `workflow_dispatch` (disparo manual),
-`working-directory: sports-betting`, instala dependências, roda `python main.py` com as 3 credenciais como
-secrets, e commita+pusha `storage/picks.json` de volta (runners são efêmeros). Os 3 secrets estão
-configurados no GitHub e um run manual (`workflow_dispatch`) já confirmou o pipeline de ponta a ponta —
-commit automático de `github-actions[bot]` no repo e mensagens reais recebidas no Telegram. Repo requer
-"Read and write permissions" em Settings → Actions → General → Workflow permissions (senão o `git push`
-final do job falha) — já habilitado. **Nota**: se um workflow novo/editado não aparecer na aba Actions
-mesmo estando no branch padrão, é só falta de reindexação do GitHub — basta um novo push tocando o arquivo
-do workflow pra ele aparecer (aconteceu uma vez neste repo).
+workflow roda: cron diário (10h UTC = 07h BRT) + `workflow_dispatch` (disparo manual),
+`working-directory: sports-betting`, instala dependências, roda `python main.py` com as credenciais como
+secrets, e commita+pusha `storage/picks.json` de volta (runners são efêmeros). Os secrets estão configurados
+no GitHub e um run manual (`workflow_dispatch`) já confirmou o pipeline de ponta a ponta — commit automático
+de `github-actions[bot]` no repo e mensagens reais recebidas no Telegram. Repo requer "Read and write
+permissions" em Settings → Actions → General → Workflow permissions (senão o `git push` final do job falha)
+— já habilitado. **Nota**: se um workflow novo/editado não aparecer na aba Actions mesmo estando no branch
+padrão, é só falta de reindexação do GitHub — basta um novo push tocando o arquivo do workflow pra ele
+aparecer (aconteceu uma vez neste repo).
 
 ## Status atual
 
-Bot 100% operacional de ponta a ponta — checklist inicial de setup concluído:
+Bot 100% operacional de ponta a ponta, com todas as mudanças abaixo já testadas com dados/credenciais reais
+(local e via GitHub Actions):
 
-- `.env` local criado e testado; ambiente (`.venv/`) pronto; `pytest` passando (26/26).
-- CSV histórico correto baixado (`adaoduque/Brasileirao_Dataset`, 2003-2024, 8785 partidas) — README
-  corrigido, já que football-data.co.uk (fonte original citada) não cobre o Brasileirão.
-- Nomes de times conferidos contra a Odds API real e mapeados em `data/team_aliases.py` (6 aliases; 2 times
-  — Mirassol, Remo — seguem sem histórico por serem recém-promovidos, sem solução possível via alias).
-- Ponderação temporal implementada no `PoissonModel` (`half_life_days`) depois de detectar EVs
-  artificialmente altos (>100%) no primeiro run real — ver "Modelo" acima pra limitação remanescente.
-- `python main.py` rodado de ponta a ponta localmente várias vezes, e via GitHub Actions (`workflow_dispatch`)
-  com sucesso confirmado — secrets configurados, commit automático de volta funcionando, Telegram recebendo.
+- Setup inicial completo: `.env`, ambiente local, GitHub Actions com secrets configurados.
+- 9 competições ativas (Brasileirão + 5 ligas europeias + 3 copas UEFA), cada uma com seu próprio CSV
+  histórico e modelo calibrado — ver tabela no README.
+- Filtro de "só jogos de hoje em BRT" — corrigido bug onde o bot mostrava jogos de dias futuros.
+- Horário de envio: 7h BRT (mudou de 8h).
+- Mercados expandidos: além de 1X2 e over/under 2.5, agora também BTTS (ambas marcam) e dupla chance —
+  buscados por evento só pros jogos já filtrados como "de hoje".
+- Suporte a múltiplas chaves da Odds API (`ODDS_API_KEYS_EXTRA`) com fallback automático quando uma fica
+  sem crédito.
+- Mensagens do Telegram redesenhadas: agrupadas por competição e por jogo, mais emojis, rodapé explicando
+  o que é EV.
+- Ponderação temporal no modelo (`half_life_days`) — reduz mas não elimina EVs artificialmente altos.
 
-Pendência conhecida (decisão consciente, não bug): considerado e adiado por decisão do usuário um teto de
-EV (`EV_MAX_THRESHOLD`) como segunda camada de segurança contra os EVs ainda artificialmente altos em
-alguns picks (mesmo após a ponderação temporal) — não implementado por ora, usuário prefere revisar
-manualmente antes de apostar.
+Pendências conhecidas (decisões conscientes, não bugs):
+- Teto de EV (`EV_MAX_THRESHOLD`) cogitado como segunda camada de segurança contra EVs artificialmente
+  altos — não implementado, usuário prefere revisar manualmente antes de apostar.
+- Modelo combinado das copas UEFA não normaliza diferença de padrão de gols entre as 5 ligas domésticas
+  (ver "Fronteira de acesso a dados" acima) — simplificação deliberada, não uma modelagem por-liga completa.
 
 ## Projeto irmão (ainda não iniciado)
 

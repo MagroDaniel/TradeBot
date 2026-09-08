@@ -1,31 +1,65 @@
 # Bot de Análise — Apostas Esportivas (Futebol)
 
 Bot que roda **1x por dia** e manda tudo pelo Telegram: primeiro o resultado
-das apostas de ontem, depois as apostas de valor (+EV) identificadas para hoje.
-Ele **não aposta sozinho** — só analisa e alerta. A decisão e execução ficam
-com você.
+das apostas de ontem, depois as apostas de valor (+EV) identificadas para hoje,
+só entre os jogos que acontecem **hoje mesmo** (nada de mostrar jogo de sexta
+numa mensagem de terça). Acompanha 9 competições — Brasileirão + 5 ligas
+europeias + 3 copas europeias — pra sempre ter algo pra analisar, mesmo em
+semanas de data-FIFA ou fora do fim de semana. Ele **não aposta sozinho** —
+só analisa e alerta. A decisão e execução ficam com você.
 
 ## Como funciona
 
 1. **Odds** — busca as odds do dia via [The Odds API](https://the-odds-api.com/)
-   (free tier: 500 créditos/mês).
-2. **Modelo** — estima a probabilidade real de cada resultado (vitória/empate/
+   (free tier: 500 créditos/mês), uma competição de cada vez.
+2. **Filtro do dia** — só entram jogos que começam hoje, em horário de
+   Brasília — a Odds API devolve todos os jogos futuros da liga, não só os
+   de hoje.
+3. **Modelo** — estima a probabilidade real de cada resultado (vitória/empate/
    derrota, over/under 2.5 gols) usando um modelo de Poisson calibrado com
-   resultados históricos do time (ataque/defesa relativos à média da liga).
-3. **EV** — compara a probabilidade do modelo com a odd oferecida pelo mercado.
+   resultados históricos do time (ataque/defesa relativos à média da liga),
+   com um modelo calibrado separadamente **por competição** e ponderação
+   temporal (jogos recentes pesam mais).
+4. **EV** — compara a probabilidade do modelo com a odd oferecida pelo mercado.
    Se `(prob_modelo × odd) - 1` passar do limiar configurado, vira um "pick".
-4. **Stake** — sugere o tamanho da aposta via critério de Kelly fracionário
+5. **Stake** — sugere o tamanho da aposta via critério de Kelly fracionário
    (25% do Kelly cheio, por padrão), com um teto de segurança (3% da banca).
-5. **Telegram** — no dia seguinte, confere o placar dos jogos apostados e manda
-   o resultado; na sequência, manda os novos picks do dia.
+6. **Telegram** — no dia seguinte, confere o placar dos jogos apostados e manda
+   o resultado; na sequência, manda os novos picks do dia, agrupados por
+   competição e por jogo.
+
+## Competições acompanhadas
+
+Configurável via `SPORT_KEYS` no `.env` — o padrão cobre:
+
+| Competição | `sport_key` | Fonte do histórico |
+|---|---|---|
+| Brasileirão Série A | `soccer_brazil_campeonato` | [adaoduque/Brasileirao_Dataset](https://github.com/adaoduque/Brasileirao_Dataset) |
+| Premier League | `soccer_epl` | [xgabora/Club-Football-Match-Data](https://github.com/xgabora/Club-Football-Match-Data) |
+| La Liga | `soccer_spain_la_liga` | idem |
+| Bundesliga | `soccer_germany_bundesliga` | idem |
+| Serie A (Itália) | `soccer_italy_serie_a` | idem |
+| Ligue 1 | `soccer_france_ligue_one` | idem |
+| Champions League | `soccer_uefa_champs_league` | histórico combinado das 5 ligas acima |
+| Europa League | `soccer_uefa_europa_league` | idem |
+| Conference League | `soccer_uefa_europa_conference_league` | idem |
+
+**Cada competição precisa do seu próprio CSV histórico** em
+`data/historical/{sport_key}.csv` — competição sem CSV correspondente é
+pulada (log de aviso), não derruba a execução das demais. As 3 copas
+europeias compartilham o mesmo CSV combinado das 5 ligas domésticas — times
+de ligas fora dessa lista (Porto, Ajax, Celtic etc.) não têm histórico e são
+pulados, igual a qualquer time sem dado calibrado. Essa combinação é uma
+simplificação (não normaliza a diferença de padrão de gols entre ligas
+diferentes) — ver `CLAUDE.md` pra detalhes.
 
 ## Por que só 1x por dia?
 
 Cada chamada à The Odds API custa `regiões × mercados` créditos — mas já traz
-**todos** os jogos futuros da liga de uma vez (não é por jogo). Com o free tier
-(500 créditos/mês, ~16/dia), rodar várias vezes ao dia esgotaria o orçamento
-rápido. Rodando 1x/dia (2 chamadas: placares + odds) o consumo fica bem abaixo
-do limite, com folga para testes e ajustes no modelo.
+**todos** os jogos futuros da liga de uma vez (não é por jogo). Com 9
+competições configuradas, uma execução completa consome ~18 créditos (2 por
+competição). No free tier (500 créditos/mês) isso dá folga pra rodar 1x/dia
+com sobra, mesmo com todas as competições ativas.
 
 ## Setup
 
@@ -54,24 +88,29 @@ cp .env.example .env
 
 ### 3. Dados históricos (para calibrar o modelo)
 
-O `historical_loader.py` reconhece automaticamente duas fontes gratuitas (nenhuma
-exige chave de API), pelo formato das colunas do CSV:
+O `historical_loader.py` reconhece automaticamente o formato de duas fontes
+gratuitas (nenhuma exige chave de API), pelas colunas do CSV:
 
-- **Brasileirão** (`SPORT_KEYS` padrão, `soccer_brazil_campeonato`) — o
-  [football-data.co.uk](https://www.football-data.co.uk/data.php) **não cobre
-  o Brasileirão** (só ligas europeias), então use o
+- **Brasileirão** — o [football-data.co.uk](https://www.football-data.co.uk/data.php)
+  **não cobre o Brasileirão** (só ligas europeias), então use o
   [adaoduque/Brasileirao_Dataset](https://github.com/adaoduque/Brasileirao_Dataset)
   (2003-2024). Baixe `campeonato-brasileiro-full.csv` — colunas `mandante`,
   `visitante`, `mandante_Placar`, `visitante_Placar`.
-- **Ligas europeias** (se você trocar `SPORT_KEYS`, ex: `soccer_epl`) — baixe o
-  CSV da liga em [football-data.co.uk/data.php](https://www.football-data.co.uk/data.php)
-  (colunas `HomeTeam`, `AwayTeam`, `FTHG`, `FTAG`).
+- **Ligas europeias e copas UEFA** — formato football-data.co.uk (`HomeTeam`,
+  `AwayTeam`, `FTHG`, `FTAG`). O dataset consolidado
+  [xgabora/Club-Football-Match-Data](https://github.com/xgabora/Club-Football-Match-Data)
+  (`data/Matches.csv`, todas as ligas num arquivo só, filtrar por `Division`)
+  é a fonte mais prática — cobre as 5 ligas domésticas de uma vez.
 
-Salve o CSV em `data/historical/brasileirao.csv` (ou aponte
-`HISTORICAL_DATA_PATH` no `.env` para outro caminho/liga). Dica: junte 2-3
-temporadas no mesmo arquivo para o modelo ter mais dados — os nomes dos times
-no CSV precisam bater com os nomes usados pela The Odds API para o mesmo
-`SPORT_KEYS` (vale conferir e ajustar manualmente se necessário).
+Salve cada CSV em `data/historical/{sport_key}.csv` (ex:
+`data/historical/soccer_epl.csv`) — ou aponte `HISTORICAL_DATA_DIR` no `.env`
+pra outro diretório com a mesma convenção de nomes. Dica: quanto mais
+temporadas juntas, melhor — a ponderação temporal do modelo
+(`MODEL_HALF_LIFE_DAYS`) já dá mais peso pros jogos recentes sozinha. Os
+nomes dos times no CSV precisam bater com os nomes usados pela The Odds API
+— divergências (ex: "Manchester United" vs. "Man United") vão em
+`data/team_aliases.py`, aplicado automaticamente antes de consultar o
+modelo.
 
 ### 4. Rodar localmente
 
@@ -85,19 +124,23 @@ python main.py
 pytest
 ```
 
-Os testes cobrem o modelo de probabilidade, cálculo de EV e sizing de stake —
+Os testes cobrem o modelo de probabilidade, cálculo de EV, sizing de stake,
+carregamento de CSV, utilitários de data/hora e formatação das mensagens —
 não fazem chamadas de rede, então rodam sem precisar de credenciais.
 
 ## Automação (GitHub Actions)
 
-Já existe um workflow em `.github/workflows/daily_picks.yml` que roda o bot
-todo dia às 08h (BRT) e commita de volta o histórico de picks (`storage/picks.json`)
+Já existe um workflow em `.github/workflows/daily_picks.yml` (na raiz do
+repositório Git, não dentro de `sports-betting/`) que roda o bot todo dia às
+07h (BRT) e commita de volta o histórico de picks (`storage/picks.json`)
 para persistir entre execuções (os runners do GitHub Actions são efêmeros).
 
 Para ativar:
 1. Vá em **Settings → Secrets and variables → Actions** no repositório.
 2. Adicione os secrets `ODDS_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-3. Pronto — o workflow já roda sozinho no horário configurado (ou dispare
+3. Em **Settings → Actions → General → Workflow permissions**, marque
+   "Read and write permissions" (necessário pro commit automático de volta).
+4. Pronto — o workflow já roda sozinho no horário configurado (ou dispare
    manualmente pela aba Actions, via "Run workflow").
 
 ## Estrutura
@@ -108,7 +151,9 @@ sports-betting/
 ├── main.py                    # orquestra o job diário
 ├── data/
 │   ├── odds_client.py         # cliente da The Odds API
-│   └── historical_loader.py   # carrega resultados históricos (CSV)
+│   ├── historical_loader.py   # carrega resultados históricos (CSV)
+│   ├── team_aliases.py        # nomes de times: Odds API -> CSV histórico
+│   └── schedule.py            # utilitários de data/hora em BRT
 ├── model/
 │   └── poisson_model.py       # probabilidade de resultado via Poisson
 ├── analysis/
@@ -129,8 +174,12 @@ sports-betting/
   ROI de curto prazo para saber se o modelo bate o mercado de forma consistente.
 - **Dixon-Coles completo** (correção para placares baixos 0-0/1-0/0-1/1-1),
   hoje o modelo é uma versão simplificada (Maher, 1982).
-- **Múltiplas ligas** — já dá pra configurar via `SPORT_KEYS`, mas cada liga
-  nova consome mais créditos por execução; vale monitorar o orçamento.
+- **Normalização entre ligas** para o modelo combinado das copas europeias —
+  hoje mistura o histórico das 5 ligas domésticas sem ajustar pela diferença
+  de padrão de gols entre elas.
+- **Teto de EV** (`EV_MAX_THRESHOLD`) como segunda camada de segurança contra
+  picks com edge artificialmente alto (cogitado, não implementado — revisão
+  manual por enquanto).
 - **Persistência mais robusta** — trocar o JSON por SQLite/Postgres se o
   histórico crescer muito.
 - Projeto irmão de **daytrade** (mercado financeiro) compartilhando a mesma
