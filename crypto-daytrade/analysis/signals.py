@@ -17,6 +17,16 @@ expectância positiva de forma consistente nas duas janelas testadas — por iss
 confirmar. ADX foi testado e descartado (piorou o resultado nos dois backtests, ao contrário
 do que a literatura genérica sugeria) — fica só como filtro opcional dentro de `backtest/`,
 nunca chegou a entrar aqui.
+
+**Filtro de range por estrutura de preço (adicionado 2026-09-09, mesmo dia)**: segunda
+tentativa no mesmo objetivo do ADX (bloquear sinal em mercado de lado), mas medindo estrutura
+de preço (amplitude dos últimos 20 candles vs. amplitude média de 1 candle) em vez de fórmula
+de suavização — ver `confirms_price_structure_range`. Testado em 3 janelas (60/180/365 dias
+reais): ao contrário de todo o resto testado (candle de qualidade, RSI por regime, ATR maior —
+todos descartados, ver `docs/estrategias_extraidas_livros.md`), esse **não inverteu** de
+janela pra janela — expectância consistentemente maior (~3-5x a da produção anterior) e
+drawdown consistentemente menor (~10-13x menor). Custo real: corta os sinais em ~97% (de
+~37/dia pra ~1/dia, somando os 25 pares) — decisão consciente do usuário, sabendo da troca.
 """
 from __future__ import annotations
 
@@ -31,6 +41,8 @@ RSI_PERIOD = 14
 ATR_PERIOD = 14
 ATR_STOP_MULTIPLIER = 1.5
 RISK_REWARD_RATIO = 2.0
+RANGE_LOOKBACK = 20
+MIN_RANGE_EXPANSION = 6.0
 
 # Faixa de RSI que confirma o cruzamento em vez de brigar contra ele — evita comprar já
 # sobrecomprado ou vender já sobrevendido, mesmo com o cruzamento de médias "a favor".
@@ -62,6 +74,30 @@ def confirms_higher_timeframe_trend(higher_tf_candles: list[Candle], direction: 
     return fast[-1] > slow[-1] if direction == "long" else fast[-1] < slow[-1]
 
 
+def confirms_price_structure_range(
+    candles: list[Candle], min_range_expansion: float = MIN_RANGE_EXPANSION
+) -> bool:
+    """True só se o mercado não estiver "emparedado" num range apertado nos últimos
+    `RANGE_LOOKBACK` candles — mede estrutura de preço (amplitude total do período vs.
+    amplitude média de um candle individual), não uma fórmula de suavização como o ADX
+    (testado e descartado, ver `docs/estrategias_extraidas_livros.md`). Num trading range,
+    candles se sobrepõem bastante (Al Brooks chama de "barbwire") e a amplitude total fica só
+    um pouco maior que a de um candle; numa tendência real, os candles progressivamente se
+    estendem numa direção e a amplitude total cresce bem mais rápido que a média por candle.
+
+    False (bloqueia) se não tiver `RANGE_LOOKBACK` candles de histórico, ou se a amplitude
+    média dos candles for zero (não dá pra medir expansão sem variação nenhuma de preço)."""
+    if len(candles) < RANGE_LOOKBACK:
+        return False
+    recent = candles[-RANGE_LOOKBACK:]
+    highest = max(c.high for c in recent)
+    lowest = min(c.low for c in recent)
+    avg_bar_range = sum(c.high - c.low for c in recent) / len(recent)
+    if avg_bar_range <= 0:
+        return False
+    return (highest - lowest) / avg_bar_range >= min_range_expansion
+
+
 def generate_signal(
     symbol: str,
     candles: list[Candle],
@@ -69,6 +105,7 @@ def generate_signal(
     atr_stop_multiplier: float = ATR_STOP_MULTIPLIER,
     long_rsi_range: tuple[float, float] = LONG_RSI_RANGE,
     short_rsi_range: tuple[float, float] = SHORT_RSI_RANGE,
+    min_range_expansion: float | None = MIN_RANGE_EXPANSION,
 ) -> Signal | None:
     """None quando não há sinal (a maioria dos candles — sinal é evento raro por design,
     não um palpite a cada execução), quando o histórico é curto demais pros indicadores, ou
@@ -86,7 +123,11 @@ def generate_signal(
     (`LONG_RSI_RANGE`/`SHORT_RSI_RANGE`) — mesmo espírito, pra comparar faixas de RSI
     deslocadas por regime (ideia de Constance Brown citada no livro Análise Técnica: já que o
     sinal só confirma quando `higher_tf_candles` concorda com a direção, a faixa aceita já
-    representa um regime confirmado, não precisa recalcular nada novo)."""
+    representa um regime confirmado, não precisa recalcular nada novo).
+
+    `min_range_expansion` tem default igual ao valor de produção (`MIN_RANGE_EXPANSION`) — só
+    passe `None` pra pular esse filtro (ex: reproduzir o comportamento anterior a 2026-09-09 no
+    backtest, ver `confirms_price_structure_range`)."""
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
     lows = [c.low for c in candles]
@@ -116,6 +157,10 @@ def generate_signal(
             higher_tf_candles, "long"
         ):
             return None
+        if min_range_expansion is not None and not confirms_price_structure_range(
+            candles, min_range_expansion
+        ):
+            return None
         stop_loss = entry - atr_stop_multiplier * atr_now
         risk = entry - stop_loss
         target = entry + RISK_REWARD_RATIO * risk
@@ -128,6 +173,10 @@ def generate_signal(
     if crossed_down and short_rsi_range[0] <= rsi_now <= short_rsi_range[1]:
         if higher_tf_candles is not None and not confirms_higher_timeframe_trend(
             higher_tf_candles, "short"
+        ):
+            return None
+        if min_range_expansion is not None and not confirms_price_structure_range(
+            candles, min_range_expansion
         ):
             return None
         stop_loss = entry + atr_stop_multiplier * atr_now

@@ -108,8 +108,11 @@ séries de tamanhos diferentes sem alinhar manualmente.
 palpite forçado a cada execução. Dispara quando:
 - **Long**: EMA9 cruza de baixo pra cima da EMA21 **e** RSI14 no candle do cruzamento está entre 30-65
   (`LONG_RSI_RANGE`) — filtro que evita comprar já sobrecomprado mesmo com o cruzamento "a favor") **e**
-  `confirms_higher_timeframe_trend(higher_tf_candles, "long")` (EMA9/EMA21 do 1h também em alta).
-- **Short**: cruzamento inverso, RSI entre 35-70 (`SHORT_RSI_RANGE`), 1h também em baixa.
+  `confirms_higher_timeframe_trend(higher_tf_candles, "long")` (EMA9/EMA21 do 1h também em alta) **e**
+  `confirms_price_structure_range(candles)` (últimos 20 candles não estão "emparedados" num range apertado
+  — ver abaixo).
+- **Short**: cruzamento inverso, RSI entre 35-70 (`SHORT_RSI_RANGE`), 1h também em baixa, mesmo filtro de
+  range.
 
 O parâmetro `higher_tf_candles` é opcional (`None` = pula o filtro) só pra permitir comparar variantes no
 backtest — `main.py` **sempre** passa (busca 50 candles de `config.HIGHER_TIMEFRAME` a mais por símbolo em
@@ -117,6 +120,18 @@ backtest — `main.py` **sempre** passa (busca 50 candles de `config.HIGHER_TIME
 180 dias) confirmarem que sem esse filtro a expectância é negativa — ver "Backtest walk-forward" abaixo.
 **Não remova esse filtro sem rodar `python -m backtest.run` de novo e ver expectância positiva** — foi
 adicionado com base em dado, não em intuição, e reverter sem revalidar reabriria o mesmo problema.
+
+`confirms_price_structure_range()` (também adicionado 2026-09-09, mesmo dia) mede se a amplitude dos
+últimos `RANGE_LOOKBACK`(20) candles é pelo menos `MIN_RANGE_EXPANSION`(6.0) vezes a amplitude média de 1
+candle — trading range tem candles se sobrepondo bastante (amplitude total baixa), tendência real estende
+a amplitude total bem mais rápido que a média por candle. Segunda tentativa no mesmo objetivo do ADX
+(descartado, ver "Backtest walk-forward"), mas por estrutura de preço em vez de fórmula de suavização —
+essa **funcionou** e foi adotada em produção: testada em 3 janelas (60/180/365 dias), foi a única variante
+que não inverteu de sinal entre janelas, com expectância consistentemente maior (~3-5x a produção anterior)
+e drawdown consistentemente menor (~10-13x menor). Custo: corta os sinais em ~97% (de ~37/dia pra ~1/dia
+somando os 25 pares) — trade-off consciente, ver "Backtest walk-forward" pros números completos. O
+parâmetro `min_range_expansion` tem o mesmo espírito de `higher_tf_candles`: default = valor de produção,
+só passe `None` explicitamente pra reproduzir o comportamento anterior a essa mudança no backtest.
 
 Stop = `entry ∓ ATR_STOP_MULTIPLIER(1.5) × ATR14`; alvo = `entry ± RISK_REWARD_RATIO(2.0) × risco`. Os
 testes (`tests/test_signals.py`) usam fixtures de preço sintético **validadas empiricamente** (uma sequência
@@ -228,6 +243,32 @@ qualquer sinal, `main.py` busca os candles de 1h extras. ADX não foi adotado (p
 `backtest/run.py::VARIANTS` foi atualizado pra refletir isso — a variante "produção atual" no relatório do
 CLI é a com filtro de 1h, não mais a sem filtro.
 
+**Estratégias extraídas de livros de referência (mesmo dia, ver `docs/estrategias_extraidas_livros.md`)** —
+usuário pediu leitura de 2 livros de análise técnica/price action e extração de ideias aplicáveis. 5
+candidatos testados via `backtest/run.py`, todos em cima da produção com filtro de 1h:
+
+1. **Qualidade do candle de sinal** (corpo inteiro além da EMA + fechamento forte na direção, Al Brooks) —
+   testado 60/180 dias, resultado **misto** (melhor que produção aos 60 dias, pior aos 180) — mesmo padrão
+   de inversão que desqualificou o combo ADX+1h acima. **Descartado.**
+2. **Múltiplo de ATR maior pro stop** (2x, 3x — livro cita que day traders usam mais que 1.5x) — testado
+   60/180 dias, piora **monotonicamente e sem ambiguidade** nas duas janelas (1.5x > 2x > 3x). **Descartado**,
+   sem nem a dúvida que os outros geraram.
+3. **RSI com faixa por regime** (Constance Brown: 40-90 em alta, 10-60 em baixa, em vez do (30,65)/(35,70)
+   fixo atual) — testado 60/180 dias, resultado **neutro** (levemente pior aos 60 dias, empatado aos 180).
+   **Descartado** — nem melhora nem piora o suficiente pra justificar a mudança.
+4. **Range por estrutura de preço** (segunda tentativa no mesmo objetivo do ADX, mas por amplitude de
+   candles em vez de fórmula de suavização — ver `confirms_price_structure_range` acima) — testado em 3
+   janelas (60/180/365 dias) por causa da amostra pequena inicial (56 sinais aos 60 dias). Ao contrário de
+   tudo mais nesta lista, **não inverteu** entre janelas: `expectancy_r` 0.10→0.14→0.15, PF 1.17→1.22→1.22,
+   drawdown 9R→17R→15R (vs. produção anterior: 0.07→0.04→0.03 exp(R), 93R→196R→207R drawdown, nas mesmas
+   janelas) — amostra cresceu de 56→231→371 sinais mantendo a mesma direção. **Adotado em produção**
+   (limiar 6x; 4x foi comparado e ficou mais fraco, descartado). Trade-off consciente: corta os sinais em
+   ~97% (de ~37/dia pra ~1/dia somando os 25 pares) — usuário decidiu que valia a pena pela consistência do
+   resultado.
+5. Itens não testados (mudanças mais profundas — sinal novo ou mecânica de saída diferente, não só filtro
+   em cima do gatilho existente): divergência RSI/preço, stop ATR trailing, breakout Donchian, alvo por
+   movimento medido. Ficam documentados em `docs/estrategias_extraidas_livros.md` pra retomar depois.
+
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
 `send_signal_alert` mostra entrada/stop/alvo/RSI/motivo + disclaimer fixo (nunca alavancagem, análise
@@ -316,8 +357,10 @@ contra um sinal que realmente bateu stop/alvo/expirou nesse momento — isso já
 
 GitHub Actions rodando de verdade a cada 10 min desde 2026-09-09 (cron externo via cron-job.org +
 `workflow_dispatch`, proxy pro bloqueio 451 da Binance, `chat_id` do Telegram corrigido — ver "Automação").
-77 testes automatizados passando, sem rede. Backtest walk-forward (`backtest/`) construído e rodado duas
-vezes contra histórico real (60 e 180 dias) — ver "Backtest walk-forward" acima. Com os dois resultados
-convergindo, o filtro de tendência de 1h foi aplicado em produção (`analysis/signals.py` +
-`main.py`); ADX foi testado e descartado. Ainda sem sinal real gerado com o filtro novo em produção (só
-rodou no backtest até agora) — próxima execução do Actions já vai usar a lógica nova.
+93 testes automatizados passando, sem rede. Backtest walk-forward (`backtest/`) construído e rodado várias
+vezes contra histórico real (60, 180 e 365 dias) — ver "Backtest walk-forward" acima. Dois filtros estão em
+produção hoje: tendência de 1h (adotado depois de 2 janelas convergindo) e range por estrutura de preço
+(adotado depois de 3 janelas convergindo, sem inverter — o candidato mais consistente testado até agora).
+ADX, qualidade do candle de sinal e RSI por regime foram testados e descartados. Ainda sem sinal real
+gerado com o filtro de range em produção (só rodou no backtest até agora, e ele é bem mais raro por design
+— ~1 sinal/dia somando os 25 pares) — próxima execução do Actions já vai usar a lógica nova.

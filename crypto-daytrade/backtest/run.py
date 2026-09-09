@@ -31,13 +31,13 @@ logger = logging.getLogger(__name__)
 HIGHER_TIMEFRAME = "1h"
 
 VARIANTS = [
-    # Desde 2026-09-09, "produção atual" É a variante com filtro de 1h — confirmada em dois
-    # backtests (60 e 180 dias) como a única com expectância positiva e consistente entre
-    # janelas. As outras ficam aqui só pra reavaliar de vez em quando, não pra reabrir sem
-    # motivo (ver CLAUDE.md, "Decisões já tomadas" e "Backtest walk-forward").
+    # Histórico — as variantes abaixo (até a linha "range por estrutura") foram testadas SEM
+    # o filtro de range por estrutura de preço (adotado em produção depois, mesmo dia). Ficam
+    # aqui como registro de como cada uma se saiu isoladamente, não pra reabrir sem motivo (ver
+    # CLAUDE.md, "Decisões já tomadas" e "Backtest walk-forward").
     Variant(name="sem filtro (pré-2026-09-09)"),
     Variant(name="+ ADX >= 25 (descartado, piora)", min_adx=25.0),
-    Variant(name="+ tendência 1h (produção atual)", use_htf_trend_filter=True),
+    Variant(name="+ tendência 1h (sem filtro de range)", use_htf_trend_filter=True),
     Variant(name="+ ADX + tendência 1h", min_adx=25.0, use_htf_trend_filter=True),
     Variant(
         name="+ ADX + 1h + máx 3 correlacionados",
@@ -80,10 +80,22 @@ VARIANTS = [
     ),
     # Item 4 da lista priorizada — segunda tentativa no mesmo objetivo do ADX (detectar range
     # antes de confiar no cruzamento), mas por estrutura de preço em vez de fórmula de
-    # suavização. Dois limiares pra ver a sensibilidade: 4x (mais permissivo) e 6x (mais
-    # rígido) — ver backtest/filters.py::passes_price_structure_range_filter.
-    Variant(name="+ 1h + range por estrutura (4x)", use_htf_trend_filter=True, min_range_expansion=4.0),
-    Variant(name="+ 1h + range por estrutura (6x)", use_htf_trend_filter=True, min_range_expansion=6.0),
+    # suavização — ver analysis/signals.py::confirms_price_structure_range. Testado em 3
+    # janelas (60/180/365 dias): ao contrário de tudo mais na lista, NÃO inverteu de janela pra
+    # janela — expectância consistentemente maior e drawdown consistentemente menor que a
+    # produção anterior, ao custo de cortar os sinais em ~97%. 6x **foi adotado em produção**
+    # (MIN_RANGE_EXPANSION em analysis/signals.py); 4x foi comparado e descartado (mais fraco
+    # que o 6x nas 3 janelas).
+    Variant(
+        name="+ 1h + range por estrutura (4x, descartado)",
+        use_htf_trend_filter=True,
+        min_range_expansion=4.0,
+    ),
+    Variant(
+        name="+ 1h + range 6x (produção atual)",
+        use_htf_trend_filter=True,
+        min_range_expansion=6.0,
+    ),
 ]
 
 

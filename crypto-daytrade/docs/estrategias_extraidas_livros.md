@@ -156,30 +156,47 @@ expectância nas duas janelas, não só redução de risco). Parâmetros `long_r
 `short_rsi_range` ficam em `analysis/signals.py::generate_signal` (default = produção) só pra
 reexplorar depois.
 
+## Resultado do backtest: range por estrutura de preço (2026-09-09) — ADOTADO EM PRODUÇÃO
+
+Item 4 testado em **3 janelas** (60, 180 e 365 dias) — precisou da terceira porque a amostra do
+limiar 6x era pequena demais nas duas primeiras (56 e 231 sinais) pra confiar isoladamente:
+
+| Variante | 60d | 180d | 365d |
+|---|---|---|---|
+| + 1h (produção anterior) | 0.07/1.11/93/2334sig | 0.04/1.06/196/6853sig | 0.03/1.05/207/13682sig |
+| + 1h + range 4x | 0.03/1.04/75/1130sig | 0.02/1.02/121/3491sig | 0.01/1.02/167/6518sig |
+| + 1h + range 6x | 0.10/1.17/9/**56**sig | 0.14/1.22/17/**231**sig | **0.15/1.22/15**/**371**sig |
+
+*(formato: exp(R)/PF/maxDD(R)/nº sinais)*
+
+**Adotado em produção** — ao contrário de todos os outros candidatos testados (que inverteram
+ranking entre janelas ou ficaram neutros), o limiar 6x se manteve consistente e até melhorou
+ligeiramente conforme a amostra cresceu (56→231→371 sinais, direção nunca inverteu). Expectância
+~3-5x maior que a produção anterior, drawdown ~10-13x menor. Custo real, aceito conscientemente
+pelo usuário: corta os sinais em ~97% (~37/dia → ~1/dia somando os 25 pares). 4x foi comparado e
+descartado (mais fraco que 6x nas 3 janelas). Implementado em
+`analysis/signals.py::confirms_price_structure_range` — não fica mais em `backtest/filters.py`
+(mesmo tratamento que o filtro de 1h recebeu quando foi adotado).
+
 ## Recomendação de próximos passos (nenhum implementado ainda)
 
-Por ordem de esforço/retorno esperado, do mais barato pro mais caro de testar:
-
-1. ~~Filtro de qualidade do candle de sinal~~ — implementado e testado, **descartado** (ver seção
-   acima).
-2. ~~Variantes de múltiplo de ATR pro stop~~ — implementado e testado, **descartado** (ver
-   seção acima — piora monotonicamente nas duas janelas, sem ambiguidade).
+1. ~~Filtro de qualidade do candle de sinal~~ — implementado e testado, **descartado**.
+2. ~~Variantes de múltiplo de ATR pro stop~~ — implementado e testado, **descartado** (piora
+   monotonicamente nas duas janelas, sem ambiguidade).
 3. ~~RSI com faixa deslocada pelo regime de 1h já calculado~~ — implementado e testado,
-   **descartado** (ver seção acima — resultado neutro, sem melhora de expectância que se
-   sustente).
-4. **Detecção de trading range por estrutura de preço** (alternativa ao ADX já descartado) — mais
-   trabalho de implementação, maior risco de repetir o resultado negativo do ADX.
+   **descartado** (resultado neutro, sem melhora de expectância que se sustente).
+4. ~~Detecção de trading range por estrutura de preço~~ — implementado e testado em 3 janelas,
+   **adotado em produção** (ver seção acima).
 5. **Divergência RSI/preço, stop ATR trailing, Donchian breakout, movimento medido como alvo** —
-   mudanças de mecânica mais profundas (sinal novo ou saída dinâmica), maior esforço de implementação e
-   validação; ficam pra depois dos itens acima.
+   mudanças de mecânica mais profundas (sinal novo ou saída dinâmica), maior esforço de
+   implementação e validação; nenhum começado ainda.
 
-**Balanço até agora (2026-09-09)**: 3 dos 5 candidatos testados via `backtest/run.py` contra 60 e
-180 dias reais — todos descartados (ADX-style rejeição limpa pro múltiplo de ATR; resultado
-neutro/misto pro filtro de qualidade do candle e pra faixa de RSI por regime). A produção atual
-(só filtro de tendência de 1h) segue sendo a configuração validada. Os 2 itens restantes na lista
-(detecção de range por estrutura de preço, e o grupo de mudanças mais profundas — divergência,
-stop trailing, Donchian, movimento medido) exigem mais esforço de implementação; nenhum foi
-começado ainda.
+**Balanço final (2026-09-09)**: 4 dos 5 candidatos testados via `backtest/run.py` contra até 3
+janelas de histórico real. 3 descartados (ATR maior, qualidade do candle, RSI por regime); 1
+**adotado em produção** (range por estrutura de preço) — junto com o filtro de 1h (já existente),
+são as duas mudanças que sobreviveram ao processo de validação por backtest até agora. Resta só o
+item 5 (mudanças de mecânica mais profundas) na lista, sem esforço iniciado.
 
-Nenhum desses vai pro `analysis/signals.py`/`main.py` sem primeiro rodar como variant no
-`backtest/run.py` contra histórico real — mesmo processo que decidiu o filtro de 1h e descartou o ADX.
+Nenhuma dessas mudanças foi pro `analysis/signals.py`/`main.py` sem primeiro rodar como variant
+no `backtest/run.py` contra histórico real — mesmo processo que decidiu o filtro de 1h e
+descartou o ADX.

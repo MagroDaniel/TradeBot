@@ -4,6 +4,7 @@ from analysis.signals import (
     ATR_STOP_MULTIPLIER,
     RISK_REWARD_RATIO,
     confirms_higher_timeframe_trend,
+    confirms_price_structure_range,
     generate_signal,
 )
 from data.binance_client import Candle
@@ -49,7 +50,10 @@ def _rise_then_decline(rise_candles=40, rise_step=0.1, decline_candles=9, declin
 def test_generates_long_signal_on_bullish_ema_cross_with_confirming_rsi():
     candles = _candles_from_closes(_decline_then_rise())
 
-    signal = generate_signal("TESTUSDT", candles)
+    # min_range_expansion=None isola o teste do filtro de range (ver
+    # test_price_structure_range_*) — os fixtures sintéticos deste arquivo têm amplitude baixa
+    # de propósito, não representam um trend real o suficiente pra passar no filtro de produção
+    signal = generate_signal("TESTUSDT", candles, min_range_expansion=None)
 
     assert signal is not None
     assert signal.direction == "long"
@@ -62,7 +66,7 @@ def test_generates_long_signal_on_bullish_ema_cross_with_confirming_rsi():
 def test_generates_short_signal_on_bearish_ema_cross_with_confirming_rsi():
     candles = _candles_from_closes(_rise_then_decline())
 
-    signal = generate_signal("TESTUSDT", candles)
+    signal = generate_signal("TESTUSDT", candles, min_range_expansion=None)
 
     assert signal is not None
     assert signal.direction == "short"
@@ -73,7 +77,7 @@ def test_generates_short_signal_on_bearish_ema_cross_with_confirming_rsi():
 
 def test_target_risk_reward_ratio_matches_configured_value():
     candles = _candles_from_closes(_decline_then_rise())
-    signal = generate_signal("TESTUSDT", candles)
+    signal = generate_signal("TESTUSDT", candles, min_range_expansion=None)
 
     risk = signal.entry - signal.stop_loss
     reward = signal.target - signal.entry
@@ -82,8 +86,10 @@ def test_target_risk_reward_ratio_matches_configured_value():
 
 def test_atr_stop_multiplier_parameter_widens_stop_and_target_proportionally():
     candles = _candles_from_closes(_decline_then_rise())
-    default_signal = generate_signal("TESTUSDT", candles)
-    wider_signal = generate_signal("TESTUSDT", candles, atr_stop_multiplier=3.0)
+    default_signal = generate_signal("TESTUSDT", candles, min_range_expansion=None)
+    wider_signal = generate_signal(
+        "TESTUSDT", candles, atr_stop_multiplier=3.0, min_range_expansion=None
+    )
 
     assert default_signal is not None and wider_signal is not None
     default_risk = default_signal.entry - default_signal.stop_loss
@@ -98,17 +104,21 @@ def test_atr_stop_multiplier_parameter_widens_stop_and_target_proportionally():
 
 def test_long_rsi_range_parameter_blocks_signal_outside_custom_range():
     candles = _candles_from_closes(_decline_then_rise())
-    assert generate_signal("TESTUSDT", candles) is not None  # RSI ~63 confirma a faixa padrão
+    assert generate_signal("TESTUSDT", candles, min_range_expansion=None) is not None  # RSI ~63 confirma a faixa padrão
 
-    blocked = generate_signal("TESTUSDT", candles, long_rsi_range=_UNREACHABLE_RSI_RANGE)
+    blocked = generate_signal(
+        "TESTUSDT", candles, long_rsi_range=_UNREACHABLE_RSI_RANGE, min_range_expansion=None
+    )
     assert blocked is None
 
 
 def test_short_rsi_range_parameter_blocks_signal_outside_custom_range():
     candles = _candles_from_closes(_rise_then_decline())
-    assert generate_signal("TESTUSDT", candles) is not None  # RSI ~37 confirma a faixa padrão
+    assert generate_signal("TESTUSDT", candles, min_range_expansion=None) is not None  # RSI ~37 confirma a faixa padrão
 
-    blocked = generate_signal("TESTUSDT", candles, short_rsi_range=_UNREACHABLE_RSI_RANGE)
+    blocked = generate_signal(
+        "TESTUSDT", candles, short_rsi_range=_UNREACHABLE_RSI_RANGE, min_range_expansion=None
+    )
     assert blocked is None
 
 
@@ -117,9 +127,11 @@ def test_long_rsi_range_parameter_allows_signal_default_range_would_reject():
     # de 30-65, dentro de uma faixa mais larga tipo a de Constance Brown, 40-90) — validado
     # empiricamente, mesmo espírito dos outros fixtures deste arquivo
     candles = _candles_from_closes(_decline_then_rise(rise_candles=6, rise_step=0.4))
-    assert generate_signal("TESTUSDT", candles) is None  # faixa padrão rejeita, RSI alto demais
+    assert generate_signal("TESTUSDT", candles, min_range_expansion=None) is None  # faixa padrão rejeita, RSI alto demais
 
-    wider_signal = generate_signal("TESTUSDT", candles, long_rsi_range=(40.0, 90.0))
+    wider_signal = generate_signal(
+        "TESTUSDT", candles, long_rsi_range=(40.0, 90.0), min_range_expansion=None
+    )
     assert wider_signal is not None
     assert wider_signal.direction == "long"
     assert wider_signal.rsi_value > 65
@@ -159,15 +171,57 @@ def test_higher_timeframe_filter_blocks_long_signal_against_the_bigger_trend():
     candles = _candles_from_closes(_decline_then_rise())
     downtrend_htf = _candles_from_closes([200.0 - i * 0.5 for i in range(30)])
 
-    assert generate_signal("TESTUSDT", candles) is not None  # sem filtro, dispara normalmente
-    assert generate_signal("TESTUSDT", candles, higher_tf_candles=downtrend_htf) is None
+    assert generate_signal("TESTUSDT", candles, min_range_expansion=None) is not None  # sem filtro, dispara normalmente
+    assert (
+        generate_signal(
+            "TESTUSDT", candles, higher_tf_candles=downtrend_htf, min_range_expansion=None
+        )
+        is None
+    )
 
 
 def test_higher_timeframe_filter_allows_long_signal_with_the_bigger_trend():
     candles = _candles_from_closes(_decline_then_rise())
     uptrend_htf = _candles_from_closes([50.0 + i * 0.5 for i in range(30)])
 
-    signal = generate_signal("TESTUSDT", candles, higher_tf_candles=uptrend_htf)
+    signal = generate_signal(
+        "TESTUSDT", candles, higher_tf_candles=uptrend_htf, min_range_expansion=None
+    )
 
     assert signal is not None
     assert signal.direction == "long"
+
+
+def test_price_structure_range_filter_blocks_by_default_on_a_tight_fixture():
+    # os fixtures sintéticos deste arquivo (amplitude baixa, ~0.6 de largura por candle) não
+    # representam uma tendência real o suficiente pra passar no limiar de produção (6x) — o
+    # comportamento default (sem passar min_range_expansion) precisa bloquear
+    candles = _candles_from_closes(_decline_then_rise())
+    assert generate_signal("TESTUSDT", candles) is None
+
+
+def test_price_structure_range_parameter_none_disables_the_filter():
+    candles = _candles_from_closes(_decline_then_rise())
+    assert generate_signal("TESTUSDT", candles, min_range_expansion=None) is not None
+
+
+def test_price_structure_range_parameter_low_threshold_allows_the_tight_fixture():
+    candles = _candles_from_closes(_decline_then_rise())
+    signal = generate_signal("TESTUSDT", candles, min_range_expansion=1.0)
+    assert signal is not None
+    assert signal.direction == "long"
+
+
+def test_confirms_price_structure_range_passes_for_a_steady_uptrend():
+    closes = [100.0 + i for i in range(20)]  # amplitude total cresce muito mais que a de 1 candle
+    assert confirms_price_structure_range(_candles_from_closes(closes)) is True
+
+
+def test_confirms_price_structure_range_blocks_a_tight_overlapping_range():
+    closes = [100.0 + (1.0 if i % 2 == 0 else -1.0) for i in range(20)]  # candles se sobrepõem
+    assert confirms_price_structure_range(_candles_from_closes(closes)) is False
+
+
+def test_confirms_price_structure_range_blocks_when_not_enough_history():
+    closes = [100.0 + i for i in range(10)]
+    assert confirms_price_structure_range(_candles_from_closes(closes)) is False

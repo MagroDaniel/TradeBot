@@ -21,11 +21,7 @@ from analysis.signals import (
     SHORT_RSI_RANGE,
     generate_signal,
 )
-from backtest.filters import (
-    passes_adx_filter,
-    passes_price_structure_range_filter,
-    passes_signal_candle_quality_filter,
-)
+from backtest.filters import passes_adx_filter, passes_signal_candle_quality_filter
 from data.binance_client import Candle
 from storage.signals_store import SignalRecord
 
@@ -153,6 +149,7 @@ def run_backtest(
                 atr_stop_multiplier=variant.atr_stop_multiplier or ATR_STOP_MULTIPLIER,
                 long_rsi_range=variant.long_rsi_range or LONG_RSI_RANGE,
                 short_rsi_range=variant.short_rsi_range or SHORT_RSI_RANGE,
+                min_range_expansion=variant.min_range_expansion,
             )
             if signal is None:
                 continue
@@ -162,11 +159,6 @@ def run_backtest(
 
             if variant.min_signal_candle_close_position is not None and not passes_signal_candle_quality_filter(
                 window, signal.direction, variant.min_signal_candle_close_position
-            ):
-                continue
-
-            if variant.min_range_expansion is not None and not passes_price_structure_range_filter(
-                window, min_range_expansion=variant.min_range_expansion
             ):
                 continue
 
