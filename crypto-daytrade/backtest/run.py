@@ -3,9 +3,10 @@ histórico real da Binance, pra decidir com dado (não só observação de pouco
 se vale a pena mudar `analysis/signals.py`.
 
 Uso:
-    python -m backtest.run                 # 90 dias, top 25 pares por volume (atual)
+    python -m backtest.run                 # 90 dias, universo fixo configurado
     python -m backtest.run --days 30
     python -m backtest.run --symbols BTCUSDT,ETHUSDT,SOLUSDT
+    python -m backtest.run --use-current-top  # legado, sujeito a viés de sobrevivência
 
 Importa `config.py` (por isso exige `.env` com credencial do Telegram, mesmo não mandando
 nenhuma mensagem) só pra reaproveitar TOP_SYMBOLS_COUNT/TIMEFRAME/SIGNAL_EXPIRY_HOURS em vez de
@@ -20,7 +21,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import config
-from backtest.engine import Variant, run_backtest
+from backtest.engine import ExecutionCosts, Variant, run_backtest
 from backtest.history import fetch_candles
 from backtest.report import build_report, format_report_table
 from data.binance_client import BinanceClient
@@ -106,7 +107,12 @@ def _parse_args() -> argparse.Namespace:
         "--symbols",
         type=str,
         default=None,
-        help="Lista separada por vírgula (ex: BTCUSDT,ETHUSDT). Default: top por volume atual.",
+        help="Lista separada por vírgula (ex: BTCUSDT,ETHUSDT). Sobrescreve o universo fixo.",
+    )
+    parser.add_argument(
+        "--use-current-top",
+        action="store_true",
+        help="Usa os maiores volumes de hoje (não recomendado para histórico).",
     )
     return parser.parse_args()
 
@@ -115,10 +121,15 @@ def main() -> None:
     args = _parse_args()
     client = BinanceClient()
 
+    if args.symbols and args.use_current_top:
+        raise ValueError("Use --symbols ou --use-current-top, não os dois")
     if args.symbols:
         symbols = [s.strip().upper() for s in args.symbols.split(",")]
-    else:
+    elif args.use_current_top:
+        logger.warning("Top pares de hoje no passado: resultado sujeito a viés de sobrevivência")
         symbols = client.get_top_symbols_by_volume(limit=config.TOP_SYMBOLS_COUNT)
+    else:
+        symbols = list(config.BACKTEST_SYMBOLS)
     logger.info("Símbolos: %s", ", ".join(symbols))
 
     end = datetime.now(timezone.utc)
@@ -140,25 +151,36 @@ def main() -> None:
         )
 
     reports = []
+    costs = ExecutionCosts(
+        taker_fee_rate=config.BACKTEST_TAKER_FEE_RATE,
+        slippage_rate=config.BACKTEST_SLIPPAGE_RATE,
+        funding_rate_per_8h=config.BACKTEST_FUNDING_RATE_PER_8H,
+    )
     for variant in VARIANTS:
         result = run_backtest(
             candles_by_symbol,
             variant,
             higher_tf_candles_by_symbol=higher_tf_by_symbol,
             expiry_hours=config.SIGNAL_EXPIRY_HOURS,
+            costs=costs,
+            allowed_directions=config.ALLOWED_DIRECTIONS,
         )
-        reports.append(build_report(result))
+        reports.append(build_report(result, costs=costs))
 
     print()
-    print(f"Backtest: {len(symbols)} pares, {args.days} dias, timeframe {config.TIMEFRAME}")
+    print(
+        f"Backtest: {len(symbols)} pares, {args.days} dias, timeframe {config.TIMEFRAME}, "
+        f"modo {config.TRADING_MODE}"
+    )
     print(f"Período: {start.date()} a {end.date()}")
     print()
     print(format_report_table(reports))
     print()
     print(
-        "win% e exp(R) só contam sinais fechados (alvo/stop); 'aberto' é quanto ainda estava\n"
-        "em aberto no fim do período (não entra nas métricas). exp(R) > 0 = expectativa\n"
-        "positiva; PF (profit factor) > 1 = ganhos de R somam mais que perdas."
+        "win% só conta sinais fechados (alvo/stop); 'aberto' é quanto ainda estava no fim do\n"
+        "período. 'bruto' usa os preços já afetados pelo slippage; 'líq(R)' também desconta\n"
+        f"taxa taker de {costs.taker_fee_rate:.3%} por lado e funding de "
+        f"{costs.funding_rate_per_8h:.3%}/8h. PF e maxDD usam R líquido."
     )
 
 

@@ -1,4 +1,6 @@
-from data.binance_client import BinanceClient
+from datetime import datetime, timezone
+
+from data.binance_client import BinanceClient, Candle, closed_candles
 
 
 class _FakeResponse:
@@ -70,7 +72,7 @@ def test_get_top_symbols_by_volume_respects_limit(monkeypatch):
 
 
 def test_get_klines_parses_candles(monkeypatch):
-    raw = [[1788857100000, "100.0", "105.0", "95.0", "102.0", "50.0", 0, "0", 0, "0", "0", "0"]]
+    raw = [[1788857100000, "100.0", "105.0", "95.0", "102.0", "50.0", 1788857999999, "0", 0, "0", "0", "0"]]
     monkeypatch.setattr(
         "data.binance_client.requests.get",
         lambda url, params, timeout: _FakeResponse(200, raw),
@@ -86,6 +88,16 @@ def test_get_klines_parses_candles(monkeypatch):
     assert c.low == 95.0
     assert c.close == 102.0
     assert c.volume == 50.0
+    assert c.close_time_ms == 1788857999999
+
+
+def test_closed_candles_excludes_the_kline_still_in_formation():
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    now_ms = int(now.timestamp() * 1000)
+    finished = Candle(0, 1, 1, 1, 1, 1, close_time_ms=now_ms - 1)
+    open_now = Candle(1, 1, 1, 1, 1, 1, close_time_ms=now_ms + 1)
+
+    assert closed_candles([finished, open_now], now=now) == [finished]
 
 
 def _raw_candle(open_time_ms: int) -> list:

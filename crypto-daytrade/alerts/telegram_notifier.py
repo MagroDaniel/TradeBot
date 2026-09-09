@@ -53,6 +53,7 @@ class TelegramNotifier:
             f"Stop: {signal.stop_loss:.6g}",
             f"Alvo: {signal.target:.6g}",
             f"RSI: {signal.rsi_value:.0f}",
+            f"Mercado: {signal.market_mode.upper()}",
             "",
             f"<i>{signal.reason}</i>",
             "",

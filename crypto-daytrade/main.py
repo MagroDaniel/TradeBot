@@ -17,8 +17,8 @@ import config
 from alerts.telegram_notifier import TelegramNotifier
 from analysis.outcomes import check_outcome
 from analysis.performance import summarize
-from analysis.signals import generate_signal
-from data.binance_client import BinanceClient
+from analysis.signals import STRATEGY_VERSION, generate_signal, reprice_signal_for_entry
+from data.binance_client import BinanceClient, closed_candles
 from data.schedule import date_brt, today_brt
 from storage.signals_store import SignalRecord, SignalsStore
 
@@ -105,15 +105,21 @@ def scan_for_new_signals(client: BinanceClient, store: SignalsStore, notifier: T
         return
 
     new_signals = 0
+    open_signals = store.open_signals()
     for symbol in symbols:
-        if store.has_open_signal_for(symbol):
+        if any(s.symbol == symbol for s in open_signals):
             continue  # não empilha sinal novo em cima de um já aberto pro mesmo par
+        if len(open_signals) >= config.MAX_OPEN_POSITIONS:
+            logger.info("Limite total de %d posições abertas atingido", config.MAX_OPEN_POSITIONS)
+            break
 
         try:
-            candles = client.get_klines(symbol, interval=config.TIMEFRAME, limit=100)
+            candles = closed_candles(client.get_klines(symbol, interval=config.TIMEFRAME, limit=100))
             # 50 candles de 1h só pra confirmar tendência (EMA9/EMA21 precisa de pelo menos
             # 21) — ver analysis/signals.py::confirms_higher_timeframe_trend
-            higher_tf_candles = client.get_klines(symbol, interval=config.HIGHER_TIMEFRAME, limit=50)
+            higher_tf_candles = closed_candles(
+                client.get_klines(symbol, interval=config.HIGHER_TIMEFRAME, limit=50)
+            )
         except Exception:
             logger.exception("Falha ao buscar candles pra %s", symbol)
             continue
@@ -121,6 +127,26 @@ def scan_for_new_signals(client: BinanceClient, store: SignalsStore, notifier: T
         signal = generate_signal(symbol, candles, higher_tf_candles=higher_tf_candles)
         if signal is None:
             continue
+        if signal.direction not in config.ALLOWED_DIRECTIONS:
+            logger.info("Sinal %s em %s ignorado no modo %s", signal.direction, symbol, config.TRADING_MODE)
+            continue
+        if sum(s.direction == signal.direction for s in open_signals) >= config.MAX_OPEN_PER_DIRECTION:
+            logger.info(
+                "Limite de %d posições %s abertas atingido",
+                config.MAX_OPEN_PER_DIRECTION,
+                signal.direction,
+            )
+            continue
+
+        # O indicador foi confirmado no candle já fechado. O preço de execução é o
+        # preço atual, não o fechamento histórico que originou o gatilho; em caso de
+        # gap, stop/alvo são reposicionados para preservar o risco ATR planejado.
+        try:
+            execution_price = client.get_current_price(symbol) or signal.entry
+        except Exception:
+            logger.exception("Falha ao buscar preço executável para %s; usando fechamento", symbol)
+            execution_price = signal.entry
+        signal = reprice_signal_for_entry(signal, execution_price)
 
         record = SignalRecord(
             symbol=signal.symbol,
@@ -131,6 +157,15 @@ def scan_for_new_signals(client: BinanceClient, store: SignalsStore, notifier: T
             rsi_value=signal.rsi_value,
             reason=signal.reason,
             opened_at=datetime.now(timezone.utc).isoformat(),
+            strategy_version=STRATEGY_VERSION,
+            timeframe=config.TIMEFRAME,
+            signal_candle_closed_at=(
+                datetime.fromtimestamp(candles[-1].close_time_ms / 1000, tz=timezone.utc).isoformat()
+                if candles[-1].close_time_ms is not None
+                else None
+            ),
+            entry_mode="market_after_closed_candle",
+            market_mode=config.TRADING_MODE,
         )
         try:
             notifier.send_signal_alert(record)
@@ -139,6 +174,7 @@ def scan_for_new_signals(client: BinanceClient, store: SignalsStore, notifier: T
             continue
 
         store.add(record)
+        open_signals.append(record)
         new_signals += 1
 
     logger.info("%d sinal(is) novo(s) entre %d par(es) escaneado(s)", new_signals, len(symbols))

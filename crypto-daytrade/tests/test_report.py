@@ -1,7 +1,7 @@
 import pytest
 
-from backtest.engine import BacktestResult
-from backtest.report import build_report, r_multiple
+from backtest.engine import BacktestResult, ExecutionCosts
+from backtest.report import build_report, net_r_multiple, r_multiple
 from storage.signals_store import SignalRecord
 
 
@@ -37,6 +37,13 @@ def test_r_multiple_for_short_target_and_stop():
     assert r_multiple(loss) == pytest.approx(-1.0)
 
 
+def test_net_r_multiple_subtracts_fees_from_gross_result():
+    signal = _closed_signal("long", 100.0, 90.0, 120.0, "target_hit", "t1")
+
+    # Notional negociado = 100 + 120; risco = 10; 0,1% por lado custa 0,022R.
+    assert net_r_multiple(signal, ExecutionCosts(taker_fee_rate=0.001)) == pytest.approx(1.978)
+
+
 def test_r_multiple_raises_for_still_open_signal():
     open_signal = SignalRecord(
         symbol="TESTUSDT", direction="long", entry=100.0, stop_loss=90.0, target=120.0,
@@ -61,6 +68,7 @@ def test_build_report_computes_expectancy_profit_factor_and_drawdown():
     assert report.losses == 2
     assert report.win_rate == pytest.approx(0.5)
     assert report.expectancy_r == pytest.approx(0.5)  # média de [2, -1, 2, -1]
+    assert report.gross_expectancy_r == pytest.approx(0.5)
     assert report.profit_factor == pytest.approx(2.0)  # 4 / |-2|
     assert report.max_drawdown_r == pytest.approx(1.0)
 

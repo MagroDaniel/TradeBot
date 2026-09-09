@@ -26,6 +26,11 @@ class SignalRecord:
     status: str = "open"  # "open" | "target_hit" | "stop_hit" | "expired"
     closed_at: str | None = None
     close_price: float | None = None
+    strategy_version: str = "legacy"
+    timeframe: str | None = None
+    signal_candle_closed_at: str | None = None
+    entry_mode: str = "legacy"
+    market_mode: str = "legacy"  # "spot" | "futures" | "legacy"
 
 
 class SignalsStore:

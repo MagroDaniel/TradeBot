@@ -61,6 +61,26 @@ class Signal:
     reason: str
 
 
+STRATEGY_VERSION = "ema9-21-rsi-htf-range-v2-closed-candle"
+
+
+def reprice_signal_for_entry(signal: Signal, entry: float) -> Signal:
+    """Mantém o risco calculado pelo ATR quando a entrada executável difere do fechamento.
+
+    O gatilho é conhecido no fechamento do candle, mas a execução real só acontece
+    depois dele. Recalcular stop e alvo em torno do preço executável evita que um gap
+    transforme silenciosamente o risco planejado em outro risco.
+    """
+    if entry <= 0:
+        raise ValueError("Preço de entrada deve ser positivo")
+    risk = abs(signal.entry - signal.stop_loss)
+    if signal.direction == "long":
+        return Signal(signal.symbol, signal.direction, entry, entry - risk, entry + RISK_REWARD_RATIO * risk,
+                      signal.rsi_value, signal.reason)
+    return Signal(signal.symbol, signal.direction, entry, entry + risk, entry - RISK_REWARD_RATIO * risk,
+                  signal.rsi_value, signal.reason)
+
+
 def confirms_higher_timeframe_trend(higher_tf_candles: list[Candle], direction: str) -> bool:
     """True só se a tendência do timeframe maior (mesma EMA9/EMA21, mas calculada sobre
     candles de período maior — normalmente 1h enquanto `candles` é 15m) concordar com a

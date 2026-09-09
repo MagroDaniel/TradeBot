@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import requests
 
@@ -33,6 +34,21 @@ class Candle:
     low: float
     close: float
     volume: float
+    # A Binance informa este valor em cada kline. Mantê-lo evita tratar o candle
+    # ainda aberto como dado histórico utilizável pelo modelo.
+    close_time_ms: int | None = None
+
+
+def closed_candles(candles: list[Candle], now: datetime | None = None) -> list[Candle]:
+    """Retorna somente candles que já fecharam.
+
+    A última kline retornada pela Binance normalmente ainda está em formação. Seus
+    close/high/low podem mudar, portanto usá-la em EMA, RSI ou ATR faria o sinal
+    repintar. Candles antigos sem ``close_time_ms`` continuam utilizáveis para não
+    quebrar caches e fixtures legados; respostas novas da API sempre trazem o campo.
+    """
+    now_ms = int((now or datetime.now(timezone.utc)).timestamp() * 1000)
+    return [c for c in candles if c.close_time_ms is None or c.close_time_ms <= now_ms]
 
 
 class BinanceClient:
@@ -73,6 +89,7 @@ class BinanceClient:
                 low=float(c[3]),
                 close=float(c[4]),
                 volume=float(c[5]),
+                close_time_ms=int(c[6]),
             )
             for c in raw
         ]
@@ -113,6 +130,7 @@ class BinanceClient:
                     low=float(c[3]),
                     close=float(c[4]),
                     volume=float(c[5]),
+                    close_time_ms=int(c[6]),
                 )
                 for c in raw
             ]

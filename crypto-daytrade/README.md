@@ -115,6 +115,11 @@ comparando win rate, expectância em R e drawdown máximo de cada uma. Ver `back
 CLAUDE.md (seção "Backtest walk-forward") pra detalhes de como funciona e o resultado da última
 rodada.
 
+Por padrão, o teste usa um universo fixo de pares líquidos (`BACKTEST_SYMBOLS`), em vez de
+aplicar retroativamente os maiores volumes de hoje — uma fonte de viés de sobrevivência. Ajuste
+a lista no `.env` para o universo que pretende operar; `--use-current-top` só existe para
+reproduzir o comportamento histórico e emite um aviso.
+
 ## Automação (GitHub Actions)
 
 Workflow em `../.github/workflows/crypto_daytrade.yml` (raiz do repositório Git) — roda a
