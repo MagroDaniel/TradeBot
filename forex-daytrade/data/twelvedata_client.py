@@ -11,8 +11,9 @@ com um par só (EUR/USD) — dá folga grande na cota mesmo rodando a cada 10 mi
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import requests
 
@@ -130,7 +131,14 @@ class TwelveDataClient:
         candles: list[Candle] = []
         cursor_ms = start_time_ms
         page_size = 5000
+        page_count = 0
         while cursor_ms < end_time_ms:
+            if page_count > 0:
+                # free tier: 8 chamadas/minuto — espaça as páginas pra não estourar o limite
+                # num backtest que precisa de várias (365 dias de 15min passa de 5000 candles).
+                time.sleep(8)
+            page_count += 1
+
             start_str = datetime.fromtimestamp(cursor_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             end_str = datetime.fromtimestamp(end_time_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             payload = self._get(

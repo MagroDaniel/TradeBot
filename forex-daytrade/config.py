@@ -52,5 +52,21 @@ if MAX_OPEN_POSITIONS < 1 or MAX_OPEN_PER_DIRECTION < 1:
 # Sinal aberto que não bate alvo nem stop dentro desse prazo é marcado "expirado".
 SIGNAL_EXPIRY_HOURS = float(_get_env("SIGNAL_EXPIRY_HOURS", default="24"))
 
+# --- Hipóteses do backtest ---
+# Forex não cobra taxa por lado como exchange de cripto — o custo real é majoritariamente o
+# spread, que a Twelve Data não devolve. BACKTEST_SLIPPAGE_RATE funciona como proxy do spread
+# (ver backtest/engine.py::ExecutionCosts); 0.00015 ≈ 1.5 pip em EUR/USD por volta (entrada +
+# saída), estimativa conservadora pra major — ajuste pra corretora/par reais antes de confiar.
+BACKTEST_TAKER_FEE_RATE = float(_get_env("BACKTEST_TAKER_FEE_RATE", default="0.0"))
+BACKTEST_SLIPPAGE_RATE = float(_get_env("BACKTEST_SLIPPAGE_RATE", default="0.00015"))
+BACKTEST_FUNDING_RATE_PER_8H = float(_get_env("BACKTEST_FUNDING_RATE_PER_8H", default="0.0"))
+# Universo fixo pro backtest — hoje é só FOREX_SYMBOLS (EUR/USD), mas fica configurável em
+# separado pra quando a lista ao vivo crescer sem precisar re-testar todo mundo de novo.
+BACKTEST_SYMBOLS = tuple(
+    s.strip().upper()
+    for s in _get_env("BACKTEST_SYMBOLS", default="EUR/USD").split(",")
+    if s.strip()
+)
+
 # --- Armazenamento ---
 STORAGE_PATH = _get_env("STORAGE_PATH", default="storage/signals.json")

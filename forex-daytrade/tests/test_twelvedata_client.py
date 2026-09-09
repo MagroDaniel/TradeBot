@@ -119,6 +119,7 @@ def test_get_historical_candles_pages_until_a_short_page(monkeypatch):
         )
 
     monkeypatch.setattr("data.twelvedata_client.requests.get", fake_get)
+    monkeypatch.setattr("data.twelvedata_client.time.sleep", lambda seconds: None)
 
     start_ms = int(datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
     end_ms = int(datetime(2027, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
