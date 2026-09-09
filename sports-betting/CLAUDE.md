@@ -301,6 +301,11 @@ Pendências conhecidas (decisões conscientes, não bugs):
   altos — não implementado, usuário prefere revisar manualmente antes de apostar.
 - Modelo combinado das copas UEFA não normaliza diferença de padrão de gols entre as 5 ligas domésticas
   (ver "Fronteira de acesso a dados" acima) — simplificação deliberada, não uma modelagem por-liga completa.
+- `docs/estrategias_extraidas_livros.md` lista ideias extraídas de 3 livros de referência sobre apostas
+  esportivas (`docs/referencias/`) — hold sintético entre casas, combos do mesmo jogo via grade de Poisson,
+  viés de mercado em favoritos/empates, CLV. Nada disso foi implementado ainda; qualquer mudança futura
+  baseada nesses livros precisa passar pelo `backtest/` antes (mesmo processo já estabelecido pro
+  `crypto-daytrade`) — livro é hipótese, backtest é quem decide.
 
 ## Projeto irmão
 
