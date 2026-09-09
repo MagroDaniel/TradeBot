@@ -119,14 +119,33 @@ pequena, não edge real. O único ganho consistente nas duas janelas foi reduç�
 Código fica em `backtest/filters.py` como filtro opcional pra reexplorar depois (ex: testado com
 outro período de EMA de referência, ou combinado com outro filtro), mesmo tratamento que o ADX.
 
+## Resultado do backtest: múltiplo de ATR pro stop (2026-09-09)
+
+Item 2 também testado contra 60 e 180 dias reais, em cima da produção atual (filtro de 1h):
+
+| Variante | 60d exp(R) / PF / maxDD(R) | 180d exp(R) / PF / maxDD(R) |
+|---|---|---|
+| + tendência 1h (produção atual, ATR×1.5) | 0.07 / 1.11 / 93.00 | 0.04 / 1.06 / 195.88 |
+| + 1h + ATR stop 2x | 0.05 / 1.08 / 79.96 | 0.02 / 1.03 / 201.74 |
+| + 1h + ATR stop 3x | 0.01 / 1.02 / 70.36 | -0.00 / 0.99 / 193.22 |
+
+**Descartado, e dessa vez sem ambiguidade** — ao contrário do filtro de qualidade do candle
+(que pelo menos tinha resultado misto), aqui o resultado é limpo e consistente nas duas
+janelas: aumentar o múltiplo do ATR **piora monotonicamente** a expectância (1.5x > 2x > 3x
+nas duas janelas), e o drawdown nem melhora de forma confiável (piora no 2x aos 180 dias). A
+sugestão do livro (day traders usam múltiplo maior) simplesmente não se aplica a essa
+estratégia/mercado — mesma lição do ADX: heurística de livro-texto não é garantia, quem decide
+é o backtest. Parâmetro `atr_stop_multiplier` fica em `analysis/signals.py::generate_signal`
+(default = produção) só pra permitir reexplorar no futuro, sem efeito nenhum na produção atual.
+
 ## Recomendação de próximos passos (nenhum implementado ainda)
 
 Por ordem de esforço/retorno esperado, do mais barato pro mais caro de testar:
 
 1. ~~Filtro de qualidade do candle de sinal~~ — implementado e testado, **descartado** (ver seção
    acima).
-2. **Variantes de múltiplo de ATR pro stop** (2x, 3x) — muda uma constante, roda no
-   `backtest/run.py::VARIANTS` igual já foi feito pro filtro de 1h. *(em andamento)*
+2. ~~Variantes de múltiplo de ATR pro stop~~ — implementado e testado, **descartado** (ver
+   seção acima — piora monotonicamente nas duas janelas, sem ambiguidade).
 3. **RSI com faixa deslocada pelo regime de 1h já calculado** — reaproveita o dado que o bot já busca,
    não pede chamada de API nova.
 4. **Detecção de trading range por estrutura de preço** (alternativa ao ADX já descartado) — mais
