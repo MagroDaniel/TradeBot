@@ -63,6 +63,11 @@ class Variant:
     long_rsi_range: tuple[float, float] | None = None
     short_rsi_range: tuple[float, float] | None = None
     min_range_expansion: float | None = None
+    # Janela de horário UTC em que o sinal pode ABRIR (start inclusive, end exclusive) — None =
+    # sem filtro. Pesquisa (2026-09-09): a maior parte da liquidez de EUR/USD está nas sessões
+    # de Londres+NY; fora disso (madrugada UTC, só Tóquio aberto) tende a ser ruído/chop, não
+    # sinal real. Não afeta que candle é usado pros indicadores, só se o sinal é aceito.
+    session_hours_utc: tuple[int, int] | None = None
 
 
 @dataclass
@@ -191,6 +196,11 @@ def run_backtest(
                 continue
             if allowed_directions is not None and signal.direction not in allowed_directions:
                 continue
+
+            if variant.session_hours_utc is not None:
+                start_hour, end_hour = variant.session_hours_utc
+                if not (start_hour <= now_dt.hour < end_hour):
+                    continue
 
             if variant.min_adx is not None and not passes_adx_filter(window, variant.min_adx):
                 continue

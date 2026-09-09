@@ -163,3 +163,25 @@ def test_htf_trend_filter_blocks_when_no_higher_tf_history_available():
 
     assert result.closed == []
     assert result.still_open == []
+
+
+def test_session_hours_filter_allows_signal_that_opens_inside_the_window():
+    candles = _crossover_candles_with_outcome(outcome_high=200.0, outcome_low=100.0)
+    # candles[WINDOW_SIZE].open_time_ms cai em 1970-01-02 01:00 UTC (época + 100 candles de
+    # 15min) — hora 1 UTC, calculado empiricamente pro fixture deste arquivo.
+    result = run_backtest(
+        {"EUR/USD": candles}, Variant(name="sessão ampla", session_hours_utc=(0, 6))
+    )
+
+    assert len(result.closed) == 1
+
+
+def test_session_hours_filter_blocks_signal_that_opens_outside_the_window():
+    candles = _crossover_candles_with_outcome(outcome_high=200.0, outcome_low=100.0)
+
+    result = run_backtest(
+        {"EUR/USD": candles}, Variant(name="sessão Londres+NY", session_hours_utc=(7, 21))
+    )
+
+    assert result.closed == []
+    assert result.still_open == []

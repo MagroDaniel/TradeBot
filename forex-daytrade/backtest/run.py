@@ -35,21 +35,21 @@ def _variants_for(higher_timeframe: str) -> list[Variant]:
     return [
         Variant(name="sem filtro (baseline)"),
         Variant(name=f"+ tendência {higher_timeframe}", use_htf_trend_filter=True),
-        Variant(name="+ ADX >= 25", min_adx=25.0),
-        Variant(name=f"+ ADX + tendência {higher_timeframe}", min_adx=25.0, use_htf_trend_filter=True),
-        # candidatos de recalibração (item pedido pelo usuário depois da baseline reprovada,
-        # 2026-09-09) — ATR mais apertado, já que a hipótese é ruído/whipsaw, não risco mal
-        # dimensionado; RSI mais estreito, menos permissivo com cruzamento fraco.
-        Variant(name="+ ATR stop 1.0x", atr_stop_multiplier=1.0),
-        Variant(name="+ ATR stop 2.5x", atr_stop_multiplier=2.5),
-        Variant(name="+ RSI estreito (40-60/40-60)", long_rsi_range=(40.0, 60.0), short_rsi_range=(40.0, 60.0)),
-        # combo dos dois candidatos que mais melhoraram isoladamente no timeframe de 1h (ver
-        # README.md) — tendência de timeframe maior + RSI mais estreito.
+        # ADX, ATR mais apertado/largo e RSI mais estreito (isolados e em combo) já foram
+        # testados em 3 janelas e descartados (ver README.md) — ADX piora sempre; RSI+tendência
+        # parecia bom em amostra pequena mas reverteu aos 365 dias (overfitting). Removidos
+        # daqui pra não reabrir sem motivo — não sumiram, ficam documentados no README.
+        #
+        # Candidatos de sessão (pesquisa 2026-09-09): forex passa 70-80% do tempo em
+        # consolidação, e a liquidez de EUR/USD se concentra nas sessões de Londres+NY —
+        # aprox. 07h-21h UTC, com pico no overlap 12h-16h UTC. Fora disso (madrugada UTC, só
+        # Tóquio aberto) é onde mais se espera ruído/whipsaw puro.
+        Variant(name="+ sessão overlap (12-16 UTC)", session_hours_utc=(12, 16)),
+        Variant(name="+ sessão Londres+NY (07-21 UTC)", session_hours_utc=(7, 21)),
         Variant(
-            name=f"+ tendência {higher_timeframe} + RSI estreito",
+            name=f"+ sessão Londres+NY + tendência {higher_timeframe}",
+            session_hours_utc=(7, 21),
             use_htf_trend_filter=True,
-            long_rsi_range=(40.0, 60.0),
-            short_rsi_range=(40.0, 60.0),
         ),
     ]
 
