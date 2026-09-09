@@ -1,0 +1,24 @@
+name: Forex — Teste de conexão (temporário)
+
+# Workflow temporário só pra validar a chave da Twelve Data (secret FOREX_TWELVEDATA_API_KEY)
+# antes de montar o módulo forex-daytrade/ de verdade. Remover depois de confirmar.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Testar Twelve Data (EUR/USD, 1h, 5 candles)
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.FOREX_TWELVEDATA_API_KEY }}
+        run: |
+          if [ -z "$TWELVEDATA_API_KEY" ]; then
+            echo "Secret FOREX_TWELVEDATA_API_KEY não está definido"
+            exit 1
+          fi
+          curl -sS "https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1h&outputsize=5&apikey=$TWELVEDATA_API_KEY" | python3 -m json.tool
