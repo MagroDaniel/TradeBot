@@ -65,20 +65,67 @@ a amostra cresce = provável ruído estatístico, não edge real). Amostra: 18�
 pra expectância positiva** de forma consistente nas 3 janelas — o timeframe de 1h é uma
 melhoria real, mas "menos ruim" não é "lucrativo". Bot continua **fora de produção**.
 
+## Pesquisa + filtro de sessão de horário (2026-09-09, mesmo dia) — melhora real, mas insuficiente
+
+Usuário pediu pra pesquisar mais sobre forex e testar as descobertas. Achados da pesquisa:
+
+- Forex passa **70-80% do tempo em consolidação/range** — mean reversion costuma superar
+  trend-following em pares major (o oposto do que EMA crossover assume).
+- A liquidez de EUR/USD se concentra nas sessões de **Londres+NY** (aprox. 07h-21h UTC, pico no
+  overlap 12h-16h UTC) — fora disso (madrugada UTC, só Tóquio aberto) é onde mais se espera
+  ruído puro.
+- Crossover de médias estruturalmente soma dois indicadores atrasados — funciona bem em
+  tendência, whipsaw garantido em range, sem solução só de parâmetro.
+
+Testado (timeframe 1h) um filtro novo — `session_hours_utc` — que só aceita sinal cujo candle
+de abertura cai dentro da janela de horário informada, nas 3 janelas de sempre:
+
+| Janela | variante | sinais | win% | R líq |
+|---|---|---|---|---|
+| 60d | baseline (1h) | 40 | 24.2% | -0.31 |
+| 60d | + tendência 4h | 22 | 29.4% | -0.24 |
+| 60d | + sessão overlap (12-16 UTC) | 17 | 7.1% | -0.77 |
+| 60d | + sessão Londres+NY (07-21 UTC) | 33 | 25.9% | -0.27 |
+| 60d | + sessão Londres+NY + tendência 4h | 15 | 33.3% | **-0.13** |
+| 180d | baseline (1h) | 137 | 25.4% | -0.31 |
+| 180d | + tendência 4h | 66 | 32.1% | -0.19 |
+| 180d | + sessão overlap (12-16 UTC) | 49 | 23.1% | -0.36 |
+| 180d | + sessão Londres+NY (07-21 UTC) | 102 | 31.4% | -0.16 |
+| 180d | + sessão Londres+NY + tendência 4h | 49 | 37.2% | **-0.07** |
+| 365d | baseline (1h) | 244 | 21.6% | -0.40 |
+| 365d | + tendência 4h | 112 | 24.7% | -0.35 |
+| 365d | + sessão overlap (12-16 UTC) | 75 | 19.4% | -0.45 |
+| 365d | + sessão Londres+NY (07-21 UTC) | 179 | 26.1% | -0.28 |
+| 365d | + sessão Londres+NY + tendência 4h | 82 | 31.0% | **-0.18** |
+
+**Diferença importante em relação à tentativa anterior (RSI estreito)**: aquela parecia ótima
+em amostra pequena e reverteu — overfitting puro. Esta não: **em toda janela, "sessão
+Londres+NY" é melhor que a baseline, e "sessão + tendência 4h" é melhor que "tendência 4h"
+sozinho — sem inverter uma vez sequer.** É uma melhoria real, não ruído. Curiosamente, o
+overlap (12-16 UTC) sozinho piora consistentemente — mais estreito não é melhor aqui, o
+contrário do que a intuição sugeriria.
+
+**Mas ainda não é suficiente**: mesmo a melhor combinação (sessão + tendência 4h) continua com
+R líquido negativo nas 3 janelas (-0.13, -0.07, -0.18) — progresso real, mas não cruza pra
+expectância positiva. Bot continua **fora de produção**.
+
 ## Próximos passos (nenhum feito ainda — decisão em aberto)
 
-1. Testar mais combinações no timeframe de 1h (R:R diferente, ATR combinado com o filtro de
-   4h, RSI ainda mais estreito) — risco crescente de overfitting quanto mais se testa em cima
-   da mesma amostra única (só EUR/USD, só esses 365 dias); cada nova tentativa devia, no
-   mínimo, ser validada nas 3 janelas antes de confiar, mesmo padrão usado acima.
-2. Considerar que EMA9/21+RSI pode não ser a abordagem certa pra forex, independente de
-   parâmetro — precisaria de uma estratégia diferente (ex: reversão à média, já que o mercado
-   parece se comportar mais como "chop" que como tendência), não só ajuste fino.
+1. **Reconsiderar a abordagem, não só o parâmetro**: a pesquisa aponta que forex se comporta
+   mais como reversão à média que como tendência a maior parte do tempo — uma estratégia de
+   mean reversion (Bollinger Bands + RSI, fadar extremos em vez de seguir cruzamento) ataca
+   essa causa raiz diretamente, em vez de tentar consertar uma estratégia de tendência com mais
+   filtro. É esforço maior (indicador novo, gerador de sinal novo, não reaproveita
+   `generate_signal` existente) mas é o candidato mais promissor pela pesquisa.
+2. Testar mais combinações em cima do que já funciona (sessão + tendência 4h + algum terceiro
+   filtro) — risco crescente de overfitting quanto mais se testa na mesma amostra única (só
+   EUR/USD); qualquer nova tentativa precisa passar pelas 3 janelas antes de confiar, mesmo
+   padrão usado acima.
 3. Ou considerar esse caminho fechado por ora.
 
 Infraestrutura (indicadores, engine de backtest sem viés de look-ahead, cliente da Twelve Data,
-storage, Telegram, CLI com --timeframe/--higher-timeframe configuráveis) está pronta e testada
-(103 testes) pra qualquer um dos três caminhos.
+storage, Telegram, CLI com --timeframe/--higher-timeframe configuráveis, filtro de sessão)
+está pronta e testada (105 testes) pra qualquer um dos três caminhos.
 
 ## Decisões já tomadas
 
