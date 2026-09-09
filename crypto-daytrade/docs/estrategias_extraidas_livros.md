@@ -100,14 +100,33 @@ Em vez de alvo fixo por múltiplo de risco (`RISK_REWARD_RATIO`), o livro usa a 
 anterior como alvo (projeção do tamanho do último swing). Seria uma forma alternativa de definir o
 `target`, testável como variante isolada no backtest.
 
+## Resultado do backtest: filtro de qualidade do candle de sinal (2026-09-09)
+
+Item 1 da lista abaixo foi implementado (`backtest/filters.py::passes_signal_candle_quality_filter`)
+e testado contra 60 e 180 dias reais, em cima da produção atual (filtro de 1h):
+
+| Variante | 60d exp(R) / PF / maxDD(R) | 180d exp(R) / PF / maxDD(R) |
+|---|---|---|
+| + tendência 1h (produção atual) | 0.07 / 1.11 / 93.00 | 0.04 / 1.06 / 195.88 |
+| + 1h + qualidade do candle (50%) | 0.07 / 1.11 / 68.00 | 0.03 / 1.05 / 143.07 |
+| + 1h + qualidade do candle (65%) | 0.10 / 1.16 / 66.00 | 0.03 / 1.05 / 106.00 |
+
+**Descartado por enquanto** — mesmo critério usado pra rejeitar o combo ADX+1h: na janela de 60 dias
+o filtro parecia superar a produção em tudo, mas nos 180 dias a ordem **inverte** (produção com
+expectância levemente melhor). Resultado que muda de ranking entre janelas é sinal de amostra
+pequena, não edge real. O único ganho consistente nas duas janelas foi redução de drawdown máximo
+(sem melhora de expectância que se sustente) — não o suficiente pra justificar a mudança sozinho.
+Código fica em `backtest/filters.py` como filtro opcional pra reexplorar depois (ex: testado com
+outro período de EMA de referência, ou combinado com outro filtro), mesmo tratamento que o ADX.
+
 ## Recomendação de próximos passos (nenhum implementado ainda)
 
 Por ordem de esforço/retorno esperado, do mais barato pro mais caro de testar:
 
-1. **Filtro de qualidade do candle de sinal** (corpo inteiro além da EMA + fechamento forte na direção)
-   — reaproveita 100% da lógica existente, só adiciona uma condição em `generate_signal()`.
+1. ~~Filtro de qualidade do candle de sinal~~ — implementado e testado, **descartado** (ver seção
+   acima).
 2. **Variantes de múltiplo de ATR pro stop** (2x, 3x) — muda uma constante, roda no
-   `backtest/run.py::VARIANTS` igual já foi feito pro filtro de 1h.
+   `backtest/run.py::VARIANTS` igual já foi feito pro filtro de 1h. *(em andamento)*
 3. **RSI com faixa deslocada pelo regime de 1h já calculado** — reaproveita o dado que o bot já busca,
    não pede chamada de API nova.
 4. **Detecção de trading range por estrutura de preço** (alternativa ao ADX já descartado) — mais

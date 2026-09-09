@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from analysis.outcomes import check_outcome
-from analysis.signals import generate_signal
+from analysis.signals import ATR_STOP_MULTIPLIER, generate_signal
 from backtest.filters import passes_adx_filter, passes_signal_candle_quality_filter
 from data.binance_client import Candle
 from storage.signals_store import SignalRecord
@@ -34,6 +34,7 @@ class Variant:
     use_htf_trend_filter: bool = False
     max_concurrent_same_direction: int | None = None  # None = sem limite
     min_signal_candle_close_position: float | None = None  # None = sem filtro de qualidade
+    atr_stop_multiplier: float | None = None  # None = usa o default de produção (ATR_STOP_MULTIPLIER)
 
 
 @dataclass
@@ -133,7 +134,12 @@ def run_backtest(
                 if htf_window is None:
                     continue  # sem histórico de 1h suficiente ainda pra confirmar
 
-            signal = generate_signal(symbol, window, higher_tf_candles=htf_window)
+            signal = generate_signal(
+                symbol,
+                window,
+                higher_tf_candles=htf_window,
+                atr_stop_multiplier=variant.atr_stop_multiplier or ATR_STOP_MULTIPLIER,
+            )
             if signal is None:
                 continue
 

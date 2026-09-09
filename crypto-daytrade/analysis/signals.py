@@ -63,13 +63,22 @@ def confirms_higher_timeframe_trend(higher_tf_candles: list[Candle], direction: 
 
 
 def generate_signal(
-    symbol: str, candles: list[Candle], higher_tf_candles: list[Candle] | None = None
+    symbol: str,
+    candles: list[Candle],
+    higher_tf_candles: list[Candle] | None = None,
+    atr_stop_multiplier: float = ATR_STOP_MULTIPLIER,
 ) -> Signal | None:
     """None quando não há sinal (a maioria dos candles — sinal é evento raro por design,
     não um palpite a cada execução), quando o histórico é curto demais pros indicadores, ou
     quando o cruzamento aconteceu mas a tendência de `higher_tf_candles` não confirma (ver
     `confirms_higher_timeframe_trend`) — passe `None` só em contexto que deliberadamente não
-    quer esse filtro (ex: comparar variantes no backtest)."""
+    quer esse filtro (ex: comparar variantes no backtest).
+
+    `atr_stop_multiplier` tem default igual ao valor de produção (`ATR_STOP_MULTIPLIER`) — só
+    existe como parâmetro pra comparar múltiplos maiores no backtest (ver
+    `docs/estrategias_extraidas_livros.md`) sem duplicar a lógica de geração de sinal.
+    Alvo continua `RISK_REWARD_RATIO` vezes o risco, então mudar o múltiplo também alarga o
+    alvo proporcionalmente — mantém o R:R fixo, só muda a distância em preço."""
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
     lows = [c.low for c in candles]
@@ -99,7 +108,7 @@ def generate_signal(
             higher_tf_candles, "long"
         ):
             return None
-        stop_loss = entry - ATR_STOP_MULTIPLIER * atr_now
+        stop_loss = entry - atr_stop_multiplier * atr_now
         risk = entry - stop_loss
         target = entry + RISK_REWARD_RATIO * risk
         reason = (
@@ -113,7 +122,7 @@ def generate_signal(
             higher_tf_candles, "short"
         ):
             return None
-        stop_loss = entry + ATR_STOP_MULTIPLIER * atr_now
+        stop_loss = entry + atr_stop_multiplier * atr_now
         risk = stop_loss - entry
         target = entry - RISK_REWARD_RATIO * risk
         reason = (

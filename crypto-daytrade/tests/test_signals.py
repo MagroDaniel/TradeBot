@@ -1,6 +1,11 @@
 import pytest
 
-from analysis.signals import RISK_REWARD_RATIO, confirms_higher_timeframe_trend, generate_signal
+from analysis.signals import (
+    ATR_STOP_MULTIPLIER,
+    RISK_REWARD_RATIO,
+    confirms_higher_timeframe_trend,
+    generate_signal,
+)
 from data.binance_client import Candle
 
 
@@ -71,6 +76,22 @@ def test_target_risk_reward_ratio_matches_configured_value():
     risk = signal.entry - signal.stop_loss
     reward = signal.target - signal.entry
     assert reward == pytest.approx(risk * RISK_REWARD_RATIO)
+
+
+def test_atr_stop_multiplier_parameter_widens_stop_and_target_proportionally():
+    candles = _candles_from_closes(_decline_then_rise())
+    default_signal = generate_signal("TESTUSDT", candles)
+    wider_signal = generate_signal("TESTUSDT", candles, atr_stop_multiplier=3.0)
+
+    assert default_signal is not None and wider_signal is not None
+    default_risk = default_signal.entry - default_signal.stop_loss
+    wider_risk = wider_signal.entry - wider_signal.stop_loss
+    # dobrar o múltiplo (1.5 -> 3.0) dobra a distância do risco, e o alvo escala junto (R:R
+    # continua fixo em RISK_REWARD_RATIO)
+    assert wider_risk == pytest.approx(default_risk * (3.0 / ATR_STOP_MULTIPLIER))
+    assert (wider_signal.target - wider_signal.entry) == pytest.approx(
+        wider_risk * RISK_REWARD_RATIO
+    )
 
 
 def test_no_signal_on_flat_price_series():

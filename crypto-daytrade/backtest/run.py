@@ -60,6 +60,12 @@ VARIANTS = [
         use_htf_trend_filter=True,
         min_signal_candle_close_position=0.65,
     ),
+    # Item 2 da lista priorizada (docs/estrategias_extraidas_livros.md) — o livro Análise
+    # Técnica cita que day traders costumam usar múltiplo de ATR maior (3-4x) que o 1.5x atual
+    # do bot; nunca foi comparado contra outro valor. Alvo escala junto (RISK_REWARD_RATIO
+    # continua fixo), então isso alarga entrada/stop/alvo proporcionalmente, não só o stop.
+    Variant(name="+ 1h + ATR stop 2x", use_htf_trend_filter=True, atr_stop_multiplier=2.0),
+    Variant(name="+ 1h + ATR stop 3x", use_htf_trend_filter=True, atr_stop_multiplier=3.0),
 ]
 
 
