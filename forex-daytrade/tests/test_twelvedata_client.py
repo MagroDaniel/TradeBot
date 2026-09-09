@@ -93,13 +93,16 @@ def test_get_historical_candles_stops_when_page_is_short(monkeypatch):
     assert len(candles) == 1
 
 
-def test_get_historical_candles_pages_until_a_short_page(monkeypatch):
-    # página cheia = 5000 candles (o `page_size` real usado por get_historical_candles) ->
-    # precisa pedir mais uma página; a segunda, com só 1 candle, é a última.
+def test_get_historical_candles_pages_backward_when_range_is_truncated(monkeypatch):
+    # Comportamento real observado da Twelve Data: quando o intervalo pedido tem mais candles
+    # do que `outputsize` permite, ela devolve os `outputsize` mais RECENTES dentro do
+    # intervalo, sem avisar — não os mais antigos. A 1a página (cheia, 5000 candles) começa em
+    # "2026-06-01 00:00:00"; a 2a página precisa pedir `end_date` = 1h antes disso, pra cobrir
+    # o que ficou faltando entre `start_date` e o início da 1a página.
     calls = []
 
     def _full_page_values():
-        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        base = datetime(2026, 6, 1, tzinfo=timezone.utc)
         return [
             _value(
                 datetime.fromtimestamp(base.timestamp() + i * 3600, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
@@ -111,11 +114,11 @@ def test_get_historical_candles_pages_until_a_short_page(monkeypatch):
     full_page = _full_page_values()
 
     def fake_get(url, params, timeout):
-        calls.append(params["start_date"])
+        calls.append(params["end_date"])
         if len(calls) == 1:
             return _FakeResponse(200, {"values": full_page, "status": "ok"})
         return _FakeResponse(
-            200, {"values": [_value("2026-08-01 00:00:00", "1", "1", "1", "1")], "status": "ok"}
+            200, {"values": [_value("2026-01-15 00:00:00", "1", "1", "1", "1")], "status": "ok"}
         )
 
     monkeypatch.setattr("data.twelvedata_client.requests.get", fake_get)
@@ -126,7 +129,11 @@ def test_get_historical_candles_pages_until_a_short_page(monkeypatch):
     candles = TwelveDataClient(api_key="fake").get_historical_candles("EUR/USD", "1h", start_ms, end_ms)
 
     assert len(calls) == 2
+    assert calls[0] == "2027-01-01 00:00:00"  # 1a página pede o end_date original
+    assert calls[1] == "2026-05-31 23:00:00"  # 2a pede 1h antes do candle mais antigo da 1a
     assert len(candles) == 5001
+    # cobertura ficou completa: candle mais antigo da 2a página + mais antigo/recente da 1a
+    assert candles[0].open_time_ms == int(datetime(2026, 1, 15, tzinfo=timezone.utc).timestamp() * 1000)
 
 
 def test_get_historical_candles_stops_on_empty_page(monkeypatch):

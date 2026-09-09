@@ -119,28 +119,35 @@ class TwelveDataClient:
     def get_historical_candles(
         self, symbol: str, interval: str, start_time_ms: int, end_time_ms: int
     ) -> list[Candle]:
-        """Candles de um intervalo arbitrário — só pro backtest (`backtest/history.py`), igual
-        `BinanceClient.get_historical_klines`. Pagina em blocos de 5000 (o máximo por chamada
-        no free tier da Twelve Data) usando `start_date`/`end_date`, avançando o cursor pro
-        `open_time` do último candle da página + 1 intervalo a cada volta.
+        """Candles de um intervalo arbitrário — só pro backtest (`backtest/history.py`).
+        Pagina em blocos de 5000 (o máximo por chamada no free tier da Twelve Data) usando
+        `start_date`/`end_date`, mas **de trás pra frente**: quando `start_date`+`end_date`
+        cobrem mais candles do que `outputsize` permite, a API não devolve erro nem indica
+        truncamento — ela simplesmente devolve os `outputsize` candles mais RECENTES dentro do
+        intervalo (confirmado empiricamente: pedir 60 dias devolveu só os últimos ~52, sem
+        aviso). Avançar o cursor pra frente a partir do fim da página (como a Binance permite)
+        não funciona aqui — a página já vem "grudada" no `end_date`, avançar não descobre nada
+        novo. Em vez disso, cada nova página pede `end_date` = candle mais antigo já obtido
+        menos 1 intervalo, andando pra trás até cobrir `start_time_ms` ou a página vir curta
+        (sinal de que chegou no início disponível).
         """
         interval_ms = _INTERVAL_MS.get(interval)
         if interval_ms is None:
             raise ValueError(f"Intervalo não suportado: {interval}")
 
         candles: list[Candle] = []
-        cursor_ms = start_time_ms
+        cursor_end_ms = end_time_ms
         page_size = 5000
         page_count = 0
-        while cursor_ms < end_time_ms:
+        while cursor_end_ms > start_time_ms:
             if page_count > 0:
                 # free tier: 8 chamadas/minuto — espaça as páginas pra não estourar o limite
-                # num backtest que precisa de várias (365 dias de 15min passa de 5000 candles).
+                # num backtest que precisa de várias (mais de 5000 candles no intervalo).
                 time.sleep(8)
             page_count += 1
 
-            start_str = datetime.fromtimestamp(cursor_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            end_str = datetime.fromtimestamp(end_time_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            start_str = datetime.fromtimestamp(start_time_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            end_str = datetime.fromtimestamp(cursor_end_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             payload = self._get(
                 {
                     "symbol": symbol,
@@ -159,8 +166,8 @@ class TwelveDataClient:
             candles.extend(batch)
 
             if len(raw) < page_size:
-                break  # última página — menos que o máximo significa que chegou no fim
-            cursor_ms = batch[-1].open_time_ms + interval_ms
+                break  # página curta — cobriu tudo que existe até `start_time_ms`
+            cursor_end_ms = batch[0].open_time_ms - interval_ms
 
         # dedup por open_time_ms (a página seguinte pode repetir o candle de borda) e reordena
         by_time = {c.open_time_ms: c for c in candles}
