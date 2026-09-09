@@ -210,6 +210,37 @@ colocá-la em dúvida. Ressalva: `n=7` na janela de 60 dias é uma amostra peque
 o que sustenta a confiança é a consistência com as janelas maiores (28 e 55 sinais), igual ao
 raciocínio já usado antes.
 
+## Simulação de banca (2026-09-09) — "quanto eu teria hoje com R$100 há 1 ano?"
+
+Pergunta do usuário, respondida com o R líquido **real de cada trade** (não a média) dos 55
+sinais fechados pelo filtro de range 6x na janela de 365 dias (seção acima) — via
+`net_r_multiple` de `backtest/report.py`, capitalizando o saldo trade a trade (script temporário
+`backtest/equity_sim.py`, removido depois de extrair o resultado; o log completo por trade não
+fica versionado, só o resumo abaixo).
+
+| Risco por trade | R$100 há 1 ano viraria |
+|---|---|
+| 1% da banca | R$ 113,61 |
+| 2% da banca | R$ 127,45 |
+| 5% da banca | R$ 166,98 |
+
+**O bot não define % de risco por trade** — isso é decisão de quem opera, não está no código
+(nem em `config.py`), então qualquer número aqui depende de uma escolha externa ao backtest.
+Ressalvas importantes, sem as quais o número é enganoso:
+
+- É uma simulação **retroativa com a estratégia de hoje** — os dois filtros (1h e range 6x) só
+  foram adotados em produção em 2026-09-09. Ninguém seguiu esses sinais ao vivo no ano passado;
+  isso é "se a estratégia atual tivesse existido", não histórico real de operação.
+- O limiar 6x foi escolhido **porque** performou bem nesses mesmos dados (`backtest/run.py`
+  comparou 4x vs 6x e ficou com o melhor) — viés de seleção. Sample-size pequeno (55 trades)
+  agrava isso.
+- Juros compostos com fração fixa por trade supõe redimensionar a posição a cada operação
+  conforme a banca cresce/encolhe — mecânica que o bot não executa (é só alerta).
+- Custos assumidos (taxa 0.04%/lado, slippage 0.02%/lado, funding zero) são estimativas
+  conservadoras, não a conta real de nenhuma corretora específica.
+- Nenhum imposto, nenhuma falha de execução (ordem não preenchida no preço do modelo), nenhum
+  saque/aporte no meio do caminho.
+
 ## Recomendação de próximos passos (nenhum implementado ainda)
 
 1. ~~Filtro de qualidade do candle de sinal~~ — implementado e testado, **descartado**.
