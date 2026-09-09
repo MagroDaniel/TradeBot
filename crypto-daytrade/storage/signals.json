@@ -194,6 +194,19 @@
       "status": "open",
       "closed_at": null,
       "close_price": null
+    },
+    {
+      "symbol": "ENAUSDT",
+      "direction": "long",
+      "entry": 0.1604,
+      "stop_loss": 0.15894490741542266,
+      "target": 0.16331018516915463,
+      "rsi_value": 53.07992525505509,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 53 (não sobrecomprado)",
+      "opened_at": "2026-09-09T00:50:32.675817+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-08"
