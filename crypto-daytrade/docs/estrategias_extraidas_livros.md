@@ -138,6 +138,24 @@ estratégia/mercado — mesma lição do ADX: heurística de livro-texto não é
 é o backtest. Parâmetro `atr_stop_multiplier` fica em `analysis/signals.py::generate_signal`
 (default = produção) só pra permitir reexplorar no futuro, sem efeito nenhum na produção atual.
 
+## Resultado do backtest: RSI com faixa por regime (2026-09-09)
+
+Item 3 testado contra 60 e 180 dias reais, em cima da produção atual (filtro de 1h):
+
+| Variante | 60d exp(R) / PF / maxDD(R) | 180d exp(R) / PF / maxDD(R) |
+|---|---|---|
+| + tendência 1h (produção atual) | 0.07 / 1.11 / 93.00 | 0.04 / 1.06 / 195.88 |
+| + 1h + RSI faixa Constance Brown (40-90/10-60) | 0.06 / 1.09 / 97.00 | 0.04 / 1.06 / 168.83 |
+
+**Descartado, resultado neutro** — nem a rejeição limpa do ATR (não piora monotonicamente),
+nem a melhora clara que justificaria trocar a produção: levemente pior aos 60 dias, empatado
+em expectância e PF aos 180 dias. Único ganho consistente foi redução de drawdown aos 180 dias
+(mesmo padrão do filtro de qualidade do candle) — não o suficiente sozinho pra justificar a
+mudança, dado o critério já estabelecido no projeto (precisa melhora consistente de
+expectância nas duas janelas, não só redução de risco). Parâmetros `long_rsi_range`/
+`short_rsi_range` ficam em `analysis/signals.py::generate_signal` (default = produção) só pra
+reexplorar depois.
+
 ## Recomendação de próximos passos (nenhum implementado ainda)
 
 Por ordem de esforço/retorno esperado, do mais barato pro mais caro de testar:
@@ -146,13 +164,22 @@ Por ordem de esforço/retorno esperado, do mais barato pro mais caro de testar:
    acima).
 2. ~~Variantes de múltiplo de ATR pro stop~~ — implementado e testado, **descartado** (ver
    seção acima — piora monotonicamente nas duas janelas, sem ambiguidade).
-3. **RSI com faixa deslocada pelo regime de 1h já calculado** — reaproveita o dado que o bot já busca,
-   não pede chamada de API nova.
+3. ~~RSI com faixa deslocada pelo regime de 1h já calculado~~ — implementado e testado,
+   **descartado** (ver seção acima — resultado neutro, sem melhora de expectância que se
+   sustente).
 4. **Detecção de trading range por estrutura de preço** (alternativa ao ADX já descartado) — mais
    trabalho de implementação, maior risco de repetir o resultado negativo do ADX.
 5. **Divergência RSI/preço, stop ATR trailing, Donchian breakout, movimento medido como alvo** —
    mudanças de mecânica mais profundas (sinal novo ou saída dinâmica), maior esforço de implementação e
    validação; ficam pra depois dos itens acima.
+
+**Balanço até agora (2026-09-09)**: 3 dos 5 candidatos testados via `backtest/run.py` contra 60 e
+180 dias reais — todos descartados (ADX-style rejeição limpa pro múltiplo de ATR; resultado
+neutro/misto pro filtro de qualidade do candle e pra faixa de RSI por regime). A produção atual
+(só filtro de tendência de 1h) segue sendo a configuração validada. Os 2 itens restantes na lista
+(detecção de range por estrutura de preço, e o grupo de mudanças mais profundas — divergência,
+stop trailing, Donchian, movimento medido) exigem mais esforço de implementação; nenhum foi
+começado ainda.
 
 Nenhum desses vai pro `analysis/signals.py`/`main.py` sem primeiro rodar como variant no
 `backtest/run.py` contra histórico real — mesmo processo que decidiu o filtro de 1h e descartou o ADX.
