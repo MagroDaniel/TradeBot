@@ -191,9 +191,9 @@
       "rsi_value": 47.17459856982321,
       "reason": "EMA9 cruzou abaixo da EMA21, RSI em 47 (não sobrevendido)",
       "opened_at": "2026-09-09T00:30:39.472629+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T06:30:26.710267+00:00",
+      "close_price": 260.9124089214361
     },
     {
       "symbol": "ENAUSDT",
