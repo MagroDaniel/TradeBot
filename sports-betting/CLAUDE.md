@@ -335,8 +335,9 @@ Pendências conhecidas (decisões conscientes, não bugs):
   "Lógica financeira" abaixo) e combos do mesmo jogo (`PoissonModel.match_probabilities`, ver "Modelo"
   abaixo) já foram implementados. Viés de favorito forte/empate foi investigado com uma checagem real de
   calibração (`backtest/calibration.py`) — achado real documentado no arquivo, nenhuma correção aplicada
-  ainda (decisão do usuário). CLV segue pendente de decisão de produto (custo de API extra pra ter uma
-  odd de "fechamento" — hoje o bot só busca odds 1x de manhã).
+  ainda (decisão do usuário). CLV foi adiado — usuário optou por manter a arquitetura de execução 1x/dia
+  como já estava decidido, em vez de pagar o custo extra (segunda leitura de odds ou plano pago da Odds
+  API) só pra ter uma odd de "fechamento" pra comparar.
 
 ## Projeto irmão
 

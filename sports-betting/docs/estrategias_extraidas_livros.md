@@ -6,15 +6,16 @@ mais uma resenha de 5 páginas). Este documento resume o que é **potencialmente
 (ver `crypto-daytrade/docs/estrategias_extraidas_livros.md`): livro é hipótese, o que decide é
 teste contra dado real — nesse caso, os itens 1 e 2 foram implementados (são features
 autocontidas, sem exigir re-treino ou mudança de critério de decisão), o item 3 foi investigado
-com uma checagem real contra o histórico (resultado abaixo), e o item 4 segue pendente de uma
-decisão de produto (custo de API adicional).
+com uma checagem real contra o histórico (resultado abaixo), e o item 4 foi adiado (decisão
+explícita do usuário — ver abaixo).
 
 **Status**: ✅ item 1 (hold sintético) implementado — `analysis/ev.py::market_hold`,
 `main.py::_synthetic_holds_by_selection`, exibido no Telegram. ✅ item 2 (combos do mesmo jogo)
 implementado — `model/poisson_model.py::match_probabilities` ganhou os 6 combos resultado×total,
 ainda sem uso em picks reais (ver ressalva no item). ✅ item 3 investigado — achado real abaixo,
 nenhuma mudança de código aplicada a partir dele ainda (é sobre calibração do modelo, uma decisão
-de correção seria um passo à parte). ⏳ item 4 aguardando decisão do usuário.
+de correção seria um passo à parte). ⏸️ item 4 (CLV) adiado — usuário escolheu não mexer na
+arquitetura de execução por enquanto (ver decisão no item).
 
 ## Livros lidos
 
@@ -176,8 +177,11 @@ mesmo dia — não há uma segunda leitura perto do horário do jogo pra servir 
 implementar CLV de verdade seria preciso, ou (a) uma segunda chamada à Odds API perto do
 `commence_time` de cada jogo (custo de crédito adicional e mudança de arquitetura — hoje é um job
 único), ou (b) o endpoint de odds históricas da própria Odds API, que é recurso pago (não faz parte
-do free tier atual). Vale registrar como pendência de decisão de produto, não implementar sem
-decidir isso com o usuário primeiro.
+do free tier atual).
+
+**Decisão (usuário, após eu apresentar as opções)**: adiar por enquanto. Manter a arquitetura de
+execução 1x/dia como já estava decidido — não vale o custo/complexidade extra agora. Revisitar
+quando o volume de picks justificar. Nenhuma mudança de código feita a partir deste item.
 
 ### 5. Mercados principais vs. mercados derivados ("attack surface") — valida decisão já tomada, sugere possível expansão
 **Fonte: Logic of Sports Betting, cap. "Beating The Odds" (seção "Disadvantage #1: Attack
@@ -221,10 +225,9 @@ oferece mais mercados derivados pra futebol (ex: handicap asiático) que ainda n
 
 ## Próximos passos sugeridos
 
-Itens 1, 2 e 3 já foram trabalhados (ver status de cada um acima). O que sobra:
+Itens 1, 2 e 3 já foram trabalhados; item 4 foi adiado por decisão do usuário (ver status de cada
+um acima). O que sobra:
 1. Confirmar se a The Odds API tem algum mercado de "resultado + total" combinado pra futebol
    (item 2) — sem isso os combos do modelo continuam sem uso real em picks.
 2. Decidir se vale investigar uma correção de calibração pra favoritos fortes (item 3) — e, se
    sim, validar contra `storage/picks.json` real antes de mudar `model/poisson_model.py`.
-3. CLV (item 4) é decisão de produto (custo de API extra) antes de ser tarefa de código — ver
-   opções levantadas com o usuário.
