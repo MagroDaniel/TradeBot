@@ -173,6 +173,18 @@ mercado (`prob_modelo × odd - 1`); `kelly.py` só dimensiona o stake dado um ed
 25% do Kelly cheio, travado em `MAX_STAKE_FRACTION` da banca). Ambos são funções puras, sem I/O — mantenha
 assim, é o que permite testá-los sem mocks.
 
+**Teto de exposição por jogo** (`kelly.py::cap_group_exposure`, `main.py::_cap_match_exposure`): apostas em
+mercados diferentes do MESMO jogo não são independentes entre si (dependem do mesmo resultado final —
+"empate", "under 2.5" e "ambas não marcam" no mesmo jogo tendem a ganhar ou perder juntas). `capped_stake`
+só trava CADA aposta em `MAX_STAKE_FRACTION`; sem esse teto adicional, um jogo com valor em vários mercados
+podia concentrar várias vezes esse percentual na banca de uma vez só — foi o que aconteceu de verdade em
+08/09/2026 (2 jogos concentraram ~25% da banca sozinhos, 5 picks somando 13.3% num, 4 picks somando 12%
+noutro, e os 2 jogos deram errado). Depois de `_picks_from_candidates` montar os picks de um evento,
+`_cap_match_exposure` reduz proporcionalmente o stake de todos eles se a soma ultrapassar
+`MAX_STAKE_FRACTION` — reaproveita o mesmo número já configurado, sem criar um `.env` novo (decisão do
+usuário, opção recomendada apresentada). Não muda quais picks são gerados nem o EV/probabilidade exibidos,
+só o tamanho sugerido da aposta.
+
 **Hold sintético** (`ev.py::market_hold`, ver docs/estrategias_extraidas_livros.md item 1): soma das
 probabilidades implícitas de um mercado completo, menos 1 — mesmo cálculo que alimenta
 `remove_overround`, só que devolvendo o hold em vez das probabilidades normalizadas. `main.py`

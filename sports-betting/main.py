@@ -19,7 +19,7 @@ from pathlib import Path
 import config
 from alerts.telegram_notifier import TelegramNotifier
 from analysis.ev import calculate_ev, market_hold
-from analysis.kelly import capped_stake
+from analysis.kelly import cap_group_exposure, capped_stake
 from analysis.multiple import Multiple, MultipleLeg, build_multiple
 from data.historical_loader import load_matches_from_csv
 from data.news_check import NewsChecker
@@ -256,7 +256,8 @@ def _picks_from_candidates(
 ) -> list[Pick]:
     """Filtra as candidatas por `config.EV_THRESHOLD` e monta um `Pick` (com sizing de Kelly)
     pras que passam — a lógica de decisão central do bot, inalterada desde antes do bilhete de
-    múltipla existir."""
+    múltipla existir. No fim, aplica `_cap_match_exposure` pra travar a soma dos stakes desse
+    jogo — ver docstring de lá."""
     home_team = event["home_team"]
     away_team = event["away_team"]
 
@@ -286,6 +287,27 @@ def _picks_from_candidates(
                 market_hold=c.market_hold,
             )
         )
+    return _cap_match_exposure(picks)
+
+
+def _cap_match_exposure(picks: list[Pick]) -> list[Pick]:
+    """Apostas em mercados diferentes do MESMO jogo não são independentes entre si — dependem do
+    mesmo resultado final, então tendem a ganhar ou perder juntas (ex: "Empate", "Under 2.5" e
+    "ambas não marcam" no mesmo jogo perdem juntas se o mandante golear). `capped_stake()` já
+    trava cada aposta individual em `MAX_STAKE_FRACTION`, mas não trava a SOMA quando o modelo
+    acha valor em vários mercados do mesmo evento — e essa soma é o que de fato expõe a banca a
+    um jogo só (ver `analysis/kelly.py::cap_group_exposure`).
+
+    Achado real que motivou isso (08/09/2026): 2 jogos concentraram sozinhos ~25% da banca
+    (5 picks somando 13.3% num jogo, 4 picks somando 12% noutro) e os 2 jogos deram errado — um
+    resultado ruim só quase quebrou a banca, porque o que parecia "10 apostas diversificadas" era
+    na prática 2 apostas grandes fatiadas em vários mercados. Não muda a lista de picks nem o
+    EV/probabilidade exibidos, só o tamanho sugerido da aposta."""
+    capped_stakes = cap_group_exposure(
+        [p.suggested_stake_fraction for p in picks], config.MAX_STAKE_FRACTION
+    )
+    for p, stake in zip(picks, capped_stakes):
+        p.suggested_stake_fraction = stake
     return picks
 
 
