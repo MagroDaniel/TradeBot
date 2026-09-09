@@ -1,3 +1,5 @@
+import pytest
+
 from alerts.telegram_notifier import TelegramNotifier
 from analysis.multiple import Multiple, MultipleLeg
 from storage.picks_store import Pick
@@ -13,6 +15,9 @@ def _capture_sent_text(monkeypatch):
 
         def raise_for_status(self):
             pass
+
+        def json(self):
+            return {"ok": True, "result": {"message_id": 1}}
 
     def _fake_post(url, data, timeout):
         sent["text"] = data["text"]
@@ -159,6 +164,30 @@ def test_send_daily_picks_shows_multiple_even_without_ev_picks(monkeypatch):
     text = sent["text"]
     assert "nenhuma aposta de valor" in text
     assert "Bilhete sugerido" in text
+
+
+def test_send_raises_when_telegram_returns_ok_false_despite_http_200(monkeypatch):
+    """HTTP 2xx não garante que o Telegram aceitou a mensagem — a API sempre devolve um corpo
+    JSON com "ok", e alguns erros (ex: sem permissão no chat) podem vir com status 200 mesmo
+    assim. Sem checar esse campo, um "sucesso" no log não provava entrega real (bug real
+    encontrado ao investigar um caso de mensagem que não chegou)."""
+
+    class _FakeRejectedResponse:
+        ok = True
+        text = ""
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"ok": False, "error_code": 403, "description": "Forbidden: bot was kicked"}
+
+    monkeypatch.setattr(
+        "alerts.telegram_notifier.requests.post", lambda url, data, timeout: _FakeRejectedResponse()
+    )
+
+    with pytest.raises(RuntimeError, match="Forbidden: bot was kicked"):
+        TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", [_pick()])
 
 
 def test_send_daily_picks_no_games_today(monkeypatch):

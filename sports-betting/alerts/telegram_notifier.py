@@ -68,6 +68,21 @@ class TelegramNotifier:
             logger.error("Falha ao enviar mensagem no Telegram: %s", response.text)
         response.raise_for_status()
 
+        # A API do Telegram sempre devolve um corpo JSON com "ok" — em alguns erros (ex: chat_id
+        # válido mas sem permissão) isso pode vir com HTTP 200 mesmo assim, o que o
+        # raise_for_status() acima não pegaria. Sem essa checagem, um run de sucesso no GitHub
+        # Actions não provava que a mensagem realmente chegou — só que o Telegram respondeu.
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if not payload.get("ok", True):
+            logger.error("Telegram aceitou a requisição mas recusou a mensagem: %s", payload)
+            raise RuntimeError(f"Telegram recusou a mensagem: {payload.get('description', payload)}")
+
+        message_id = payload.get("result", {}).get("message_id")
+        logger.info("Mensagem enviada ao Telegram com sucesso (message_id=%s)", message_id)
+
     def send_results_summary(self, date: str, picks: list[Pick]) -> None:
         display_date = format_date_br(date)
         resolved = [p for p in picks if p.result is not None]
