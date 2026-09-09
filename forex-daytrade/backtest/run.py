@@ -73,6 +73,14 @@ def main() -> None:
             len(higher_tf_by_symbol[symbol]), HIGHER_TIMEFRAME,
             time.monotonic() - t0,
         )
+        # diagnóstico: confere se a cobertura de datas bate com o período pedido — pega erro
+        # silencioso de paginação (ex: API truncando outputsize sem devolver tudo que existe
+        # no intervalo) antes de confiar no resultado do backtest.
+        candles = candles_by_symbol[symbol]
+        if candles:
+            first_dt = datetime.fromtimestamp(candles[0].open_time_ms / 1000, tz=timezone.utc)
+            last_dt = datetime.fromtimestamp(candles[-1].open_time_ms / 1000, tz=timezone.utc)
+            logger.info("  cobertura real: %s a %s", first_dt.date(), last_dt.date())
 
     reports = []
     costs = ExecutionCosts(
