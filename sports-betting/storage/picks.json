@@ -12,8 +12,8 @@
       "model_probability": 0.5619908401186626,
       "ev": 0.050922871021899185,
       "suggested_stake_fraction": 0.014633008914338845,
-      "result": null,
-      "profit_units": null,
+      "result": "green",
+      "profit_units": 0.012730717755474796,
       "bookmaker": "Betfair"
     },
     {
@@ -28,8 +28,8 @@
       "model_probability": 0.2510408223758837,
       "ev": 0.19244390628544772,
       "suggested_stake_fraction": 0.01282959375236318,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.01282959375236318,
       "bookmaker": "Unibet (FR)"
     },
     {
@@ -44,8 +44,8 @@
       "model_probability": 0.2977208294790959,
       "ev": 0.667236645082937,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Unibet (FR)"
     },
     {
@@ -60,8 +60,8 @@
       "model_probability": 0.4803198440853571,
       "ev": 0.36891155564326783,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Betsson"
     },
     {
@@ -76,8 +76,8 @@
       "model_probability": 0.4480648020014302,
       "ev": 0.24562014956397582,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Matchbook"
     },
     {
@@ -92,8 +92,8 @@
       "model_probability": 0.5487616518549796,
       "ev": 0.371904129637449,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Pinnacle"
     },
     {
@@ -108,8 +108,8 @@
       "model_probability": 0.5099067192557548,
       "ev": 0.17278545428823588,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Betfair"
     },
     {
@@ -124,8 +124,8 @@
       "model_probability": 0.5558410546996537,
       "ev": 0.17838303596326588,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Matchbook"
     },
     {
@@ -140,8 +140,8 @@
       "model_probability": 0.5261045689391024,
       "ev": 0.24160678269628155,
       "suggested_stake_fraction": 0.03,
-      "result": null,
-      "profit_units": null,
+      "result": "red",
+      "profit_units": -0.03,
       "bookmaker": "Matchbook"
     },
     {
@@ -156,9 +156,155 @@
       "model_probability": 0.7685675325319961,
       "ev": 0.052937519568834634,
       "suggested_stake_fraction": 0.03,
+      "result": "red",
+      "profit_units": -0.03,
+      "bookmaker": "1xBet"
+    }
+  ],
+  "2026-09-09": [
+    {
+      "event_id": "a43752f35ceb66893134410ad476bca9",
+      "match": "Napoli x Arsenal",
+      "home_team": "Napoli",
+      "away_team": "Arsenal",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Napoli vence",
+      "odds": 6.2,
+      "model_probability": 0.39932443325432543,
+      "ev": 1.4758114861768177,
+      "suggested_stake_fraction": 0.03,
       "result": null,
       "profit_units": null,
-      "bookmaker": "1xBet"
+      "bookmaker": "Betfair"
+    },
+    {
+      "event_id": "a43752f35ceb66893134410ad476bca9",
+      "match": "Napoli x Arsenal",
+      "home_team": "Napoli",
+      "away_team": "Arsenal",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Empate",
+      "odds": 4.0,
+      "model_probability": 0.2680208324188467,
+      "ev": 0.07208332967538689,
+      "suggested_stake_fraction": 0.006006944139615574,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Unibet (FR)"
+    },
+    {
+      "event_id": "a43752f35ceb66893134410ad476bca9",
+      "match": "Napoli x Arsenal",
+      "home_team": "Napoli",
+      "away_team": "Arsenal",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Under 2.5 gols",
+      "odds": 1.96,
+      "model_probability": 0.53888022392382,
+      "ev": 0.05620523889068707,
+      "suggested_stake_fraction": 0.014636780961116425,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Matchbook"
+    },
+    {
+      "event_id": "a43752f35ceb66893134410ad476bca9",
+      "match": "Napoli x Arsenal",
+      "home_team": "Napoli",
+      "away_team": "Arsenal",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Napoli ou empate",
+      "odds": 2.38,
+      "model_probability": 0.6673452656731722,
+      "ev": 0.5882817323021499,
+      "suggested_stake_fraction": 0.03,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Pinnacle"
+    },
+    {
+      "event_id": "0f3bf8fff62bb732883c00265d28f766",
+      "match": "Liverpool x Atlético Madrid",
+      "home_team": "Liverpool",
+      "away_team": "Atlético Madrid",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Empate",
+      "odds": 4.2,
+      "model_probability": 0.25329590765711435,
+      "ev": 0.06384281215988041,
+      "suggested_stake_fraction": 0.004987719699990657,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Betfair"
+    },
+    {
+      "event_id": "0f3bf8fff62bb732883c00265d28f766",
+      "match": "Liverpool x Atlético Madrid",
+      "home_team": "Liverpool",
+      "away_team": "Atlético Madrid",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Atlético Madrid vence",
+      "odds": 4.8,
+      "model_probability": 0.3028369271869681,
+      "ev": 0.4536172504974467,
+      "suggested_stake_fraction": 0.029843240164305715,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Betfair"
+    },
+    {
+      "event_id": "0f3bf8fff62bb732883c00265d28f766",
+      "match": "Liverpool x Atlético Madrid",
+      "home_team": "Liverpool",
+      "away_team": "Atlético Madrid",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Under 2.5 gols",
+      "odds": 2.42,
+      "model_probability": 0.48757760589625754,
+      "ev": 0.17993780626894318,
+      "suggested_stake_fraction": 0.03,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Betsson"
+    },
+    {
+      "event_id": "0f3bf8fff62bb732883c00265d28f766",
+      "match": "Liverpool x Atlético Madrid",
+      "home_team": "Liverpool",
+      "away_team": "Atlético Madrid",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Ambas não marcam",
+      "odds": 2.6,
+      "model_probability": 0.45263710731137163,
+      "ev": 0.17685647900956636,
+      "suggested_stake_fraction": 0.027633824845244726,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Matchbook"
+    },
+    {
+      "event_id": "0f3bf8fff62bb732883c00265d28f766",
+      "match": "Liverpool x Atlético Madrid",
+      "home_team": "Liverpool",
+      "away_team": "Atlético Madrid",
+      "commence_time": "2026-09-09T19:00:00Z",
+      "market": "soccer_uefa_champs_league:1x2/totals",
+      "selection": "Atlético Madrid ou empate",
+      "odds": 2.15,
+      "model_probability": 0.5561328348440824,
+      "ev": 0.1956855949147771,
+      "suggested_stake_fraction": 0.03,
+      "result": null,
+      "profit_units": null,
+      "bookmaker": "Pinnacle"
     }
   ]
 }
