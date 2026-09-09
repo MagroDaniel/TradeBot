@@ -1,6 +1,6 @@
 import pytest
 
-from analysis.indicators import atr, ema, rsi
+from analysis.indicators import adx, atr, ema, rsi
 
 
 def test_ema_of_constant_series_equals_the_constant():
@@ -68,3 +68,33 @@ def test_atr_of_constant_range_equals_that_range():
 
 def test_atr_returns_empty_when_not_enough_data():
     assert atr([1.0, 2.0], [1.0, 2.0], [1.0, 2.0], period=14) == []
+
+
+def test_adx_is_high_for_a_steady_uptrend():
+    # sobe um valor fixo por candle, sem retração nenhuma — tendência forte e limpa
+    n = 40
+    closes = [100.0 + i for i in range(n)]
+    highs = [c + 1.0 for c in closes]
+    lows = [c - 1.0 for c in closes]
+
+    result = adx(highs, lows, closes, period=14)
+
+    assert result
+    assert result[-1] > 40.0  # bem acima do limiar de ~20-25 usado como filtro de tendência
+
+
+def test_adx_is_low_for_a_sideways_market():
+    # oscila pra cima e pra baixo em torno do mesmo nível — sem direção definida
+    n = 40
+    closes = [100.0 + (2.0 if i % 2 == 0 else -2.0) for i in range(n)]
+    highs = [c + 1.0 for c in closes]
+    lows = [c - 1.0 for c in closes]
+
+    result = adx(highs, lows, closes, period=14)
+
+    assert result
+    assert result[-1] < 20.0
+
+
+def test_adx_returns_empty_when_not_enough_data():
+    assert adx([1.0, 2.0], [1.0, 2.0], [1.0, 2.0], period=14) == []

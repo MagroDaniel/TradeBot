@@ -77,9 +77,9 @@ interno):
    o que evita repetir. Se o envio falhar, **não** marca `last_report_date` como enviado — tenta de novo na
    próxima execução (mesmo padrão de "só marca sucesso depois de confirmar" do resto do projeto).
 2. **`resolve_open_signals()`** — pra cada sinal com `status="open"` em `SignalsStore`, busca candles desde
-   `opened_at` e confere se o preço bateu no stop ou no alvo primeiro (`_check_outcome` — **checa o stop
-   primeiro dentro de cada candle**, padrão conservador de backtest: se os dois seriam tocados no mesmo
-   candle, assume que o stop bateu primeiro, não superestima acerto). Sinal aberto há mais de
+   `opened_at` e confere se o preço bateu no stop ou no alvo primeiro (`analysis/outcomes.py::check_outcome`
+   — **checa o stop primeiro dentro de cada candle**, padrão conservador de backtest: se os dois seriam
+   tocados no mesmo candle, assume que o stop bateu primeiro, não superestima acerto). Sinal aberto há mais de
    `SIGNAL_EXPIRY_HOURS` sem bater nenhum dos dois vira `"expired"`. Resultado real vai pro Telegram
    (`notifier.send_result`) e é persistido (`store.update`).
 3. **`scan_for_new_signals()`** — pra cada um dos `TOP_SYMBOLS_COUNT` pares de maior volume que **não**
@@ -144,6 +144,65 @@ sinais ao longo do tempo (um por vez, já que `has_open_signal_for` impede sobre
 Espelha `backtest/backtester.py` do bot de apostas. `win_rate` só considera `wins + losses` no denominador
 — sinais `expired` não contam a favor nem contra (nem ganharam nem perderam, ficaram sem definição dentro
 do prazo). **Nunca filtre `stop_hit` do que entra em `summarize()`** — ver "Decisões já tomadas" acima.
+Só resume sinais que o bot **já emitiu de verdade** — pra validar mudança de estratégia com amostra grande
+antes de ir pra produção, ver "Backtest walk-forward" logo abaixo (módulo diferente, propósito diferente).
+
+### Backtest walk-forward (`backtest/`, adicionado 2026-09-09)
+
+Motivado pelo usuário reportando "muitas perdas" com a estratégia — mas os primeiros sinais reais (ver
+"Status atual") eram uma amostra pequena (9) e correlacionada (quase todos "long", abertos numa janela de
+8 minutos — provavelmente um único movimento de mercado, não 9 apostas independentes), então não dava pra
+concluir nada com rigor. Esse módulo simula a estratégia (e variantes com filtro) candle a candle contra
+meses de histórico REAL da Binance, reaproveitando a lógica de produção sem duplicar (`analysis/signals.py`
+e `analysis/outcomes.py::check_outcome` são os mesmos usados por `main.py` — garante que o backtest testa
+exatamente o que roda ao vivo, não uma reimplementação que pode divergir).
+
+- **`data/binance_client.py::get_historical_klines()`** — candles de um intervalo de tempo arbitrário
+  (paginado em blocos de 1000, o máximo por chamada), diferente de `get_klines()` que só pega "os N mais
+  recentes" (isso é tudo que a execução ao vivo precisa).
+- **`analysis/outcomes.py::check_outcome()`** — extraído de dentro de `main.py::resolve_open_signals` (era
+  `_check_outcome`, função privada) pra virar compartilhado entre live e backtest.
+- **`backtest/history.py`** — busca + cacheia candles em disco (`backtest/.cache/`, no `.gitignore` — é
+  cache local, não versiona). Backtest roda a mesma janela várias vezes (uma por variante testada);
+  buscar tudo de novo a cada vez seria lento à toa.
+- **`backtest/filters.py`** — filtros de regime opcionais pra testar em cima do gatilho EMA/RSI já
+  existente: `passes_adx_filter` (ADX(14) — abaixo de ~20-25 costuma indicar mercado de lado, onde
+  cruzamento de EMA tende a ser ruído) e `passes_higher_timeframe_trend_filter` (exige que o timeframe
+  maior, 1h, concorde com a direção do sinal de 15m). `adx()` mora em `analysis/indicators.py` (é um
+  indicador puro, mesmo espírito de ema/rsi/atr), não em `backtest/` — só o *uso* dele como filtro é
+  específico do backtest.
+- **`backtest/engine.py::run_backtest()`** — processa **todos os símbolos no mesmo "relógio"**
+  (timestamp por timestamp, não símbolo por símbolo do início ao fim) — necessário pro
+  `Variant.max_concurrent_same_direction` fazer sentido: precisa saber quantas posições de OUTROS símbolos
+  já estão abertas naquele instante exato, pra simular um limite de correlação entre pares (o padrão de
+  "vários alts long ao mesmo tempo, o mercado reverte, todos batem stop juntos" observado em produção em
+  2026-09-08 não é capturado testando símbolo por símbolo isoladamente).
+- **`backtest/report.py`** — `analysis/performance.summarize()` continua sendo a fonte de wins/losses/
+  win_rate; esse módulo só soma `r_multiple` (retorno em unidades de risco, calculado direto de
+  entry/stop/close — não hardcoda `RISK_REWARD_RATIO`, funciona igual pra target_hit/stop_hit/expired),
+  expectância (`expectancy_r`, média de R — >0 é expectativa positiva), profit factor e drawdown máximo em
+  R (não é P&L em dinheiro, não há dimensionamento de posição aqui).
+- **`backtest/run.py`** — CLI (`python -m backtest.run --days 90`). É o único arquivo do módulo que importa
+  `config.py` (só pra reaproveitar `TOP_SYMBOLS_COUNT`/`TIMEFRAME`/`SIGNAL_EXPIRY_HOURS`, não duplicar) —
+  por isso exige `.env`, mas `engine.py`/`filters.py`/`history.py` continuam sem essa dependência, testáveis
+  sem credencial como o resto do projeto.
+
+**Limitação conhecida**: `run.py` usa os pares de maior volume de **hoje** aplicados retroativamente ao
+período inteiro do backtest (não reconstrói qual era o top-25 dia a dia no passado) — um símbolo listado há
+pouco tempo (ex: apareceu com só ~4 dias de histórico num backtest de 60 dias) é claramente afetado por
+isso. Não invalida a comparação entre variantes (todas rodam contra o mesmo conjunto de dados), mas o
+número absoluto de expectância pode não se repetir exatamente se o conjunto de pares de maior volume mudar.
+
+**Resultado do primeiro backtest real (60 dias, 25 pares, 2026-09-09)** — confirma com amostra grande
+(4200+ trades) o que o usuário via ao vivo: baseline (estratégia de produção, sem filtro) deu
+`expectancy_r ≈ -0.05`, profit factor `0.92` — **expectativa negativa confirmada**, não foi azar de amostra
+pequena. Variante `+ tendência 1h` (só o filtro de timeframe maior, sem ADX) foi a única com expectativa
+positiva: `expectancy_r ≈ +0.06`, profit factor `1.09`, drawdown máximo bem menor (101R vs 267R do
+baseline) — reduz o volume de sinais em ~45%, mas melhora a qualidade do que sobra. Contra-intuitivo: ADX
+sozinho **piorou** o resultado (`-0.10`) em vez de melhorar, e combinar ADX + 1h também ficou negativo — a
+pesquisa genérica sobre ADX como filtro de tendência não se confirmou neste mercado/período específico;
+quem decide o que vale é o backtest, não a heurística de "livro-texto". Decisão de que variante (se
+alguma) vai pra produção ainda não foi tomada — pendente de decisão do usuário.
 
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
@@ -215,8 +274,12 @@ localmente (Brasil) essa variável fica vazia e continua batendo direto na Binan
 (`crypto_daytrade.yml`) passa `BINANCE_API_BASE_URL: ${{ secrets.CRYPTO_BINANCE_PROXY_URL }}` — enquanto
 esse secret não existir, o Actions volta a tomar 451 (mesmo comportamento de antes, não piora nada). Ver
 `binance-proxy/README.md` pros passos de deploy (import do repo na Vercel, root directory `binance-proxy`)
-e cadastro do secret. **Ainda pendente**: usuário precisa fazer esse deploy e cadastrar
-`CRYPTO_BINANCE_PROXY_URL` — sem isso, o bot continua sem gerar/resolver sinal nenhum via Actions.
+e cadastro do secret. **Resolvido em 2026-09-09**: proxy deployado (`trade-bot-one-chi.vercel.app`), secret
+`CRYPTO_BINANCE_PROXY_URL` cadastrado, confirmado funcionando via logs reais do Actions (run #18 resolveu
+9/9 sinais abertos, run #19 escaneou 25 pares sem nenhum erro). Nessa mesma investigação também apareceu
+(e foi corrigido) um terceiro problema, sem relação com Binance/proxy: o grupo do Telegram tinha migrado
+pra supergrupo, invalidando o `chat_id` antigo — `CRYPTO_TELEGRAM_CHAT_ID` foi atualizado pro novo ID que o
+próprio erro 400 da API do Telegram devolveu (`migrate_to_chat_id`).
 
 ## Status atual
 
@@ -224,10 +287,12 @@ Reescrito do zero em 2026-09-08 (pivô de "listagens novas" pra "sinais técnico
 com dados e credenciais reais: `python main.py` rodado localmente, gerou **8 sinais reais de 25 pares
 escaneados**, todos enviados com sucesso pro grupo do Telegram (formato confirmado pelo usuário — entrada/
 stop/alvo/RSI, sem menção a alavancagem). `resolve_open_signals` ainda não foi exercitado de ponta a ponta
-contra um sinal que realmente bateu stop/alvo/expirou (só roda quando existe sinal `"open"` no
-`storage/signals.json` — os 8 gerados nesse run ainda estavam abertos). 36 testes automatizados passando,
-sem rede.
+contra um sinal que realmente bateu stop/alvo/expirou nesse momento — isso já aconteceu depois, em produção
+(ver "Automação" acima: run #18 do Actions resolveu os 9 sinais dessa leva inicial, 2 alvo / 7 stop).
 
-**Ainda pendente**: GitHub Actions (secrets `CRYPTO_TELEGRAM_BOT_TOKEN`/`CRYPTO_TELEGRAM_CHAT_ID`) — o
-workflow já existe (`crypto_daytrade.yml`), só falta configurar os secrets e rodar uma vez lá pra confirmar
-o pipeline completo (igual foi feito no bot de apostas).
+GitHub Actions rodando de verdade a cada 10 min desde 2026-09-09 (cron externo via cron-job.org +
+`workflow_dispatch`, proxy pro bloqueio 451 da Binance, `chat_id` do Telegram corrigido — ver "Automação").
+75 testes automatizados passando, sem rede. Backtest walk-forward (`backtest/`) construído e rodado uma
+vez contra 60 dias reais — ver "Backtest walk-forward" acima pro resultado. Nenhuma mudança em
+`analysis/signals.py` foi aplicada ainda a partir desse resultado; produção continua com a estratégia
+original (sem filtro de ADX/tendência 1h/correlação) até decisão do usuário.

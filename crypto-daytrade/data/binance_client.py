@@ -77,6 +77,53 @@ class BinanceClient:
             for c in raw
         ]
 
+    def get_historical_klines(
+        self, symbol: str, interval: str, start_time_ms: int, end_time_ms: int
+    ) -> list[Candle]:
+        """Candles de um intervalo de tempo arbitrário (não só "os N mais recentes" como
+        `get_klines`) — pagina em blocos de 1000 (o máximo por chamada da Binance) usando
+        `startTime`, avançando pro `open_time` do último candle + 1ms a cada volta. Só existe
+        pro backtest (`backtest/history.py`); a execução ao vivo nunca precisa de histórico
+        profundo, só dos últimos N candles.
+        """
+        candles: list[Candle] = []
+        cursor = start_time_ms
+        while cursor < end_time_ms:
+            response = requests.get(
+                f"{BASE_URL}/klines",
+                params={
+                    "symbol": symbol,
+                    "interval": interval,
+                    "startTime": cursor,
+                    "endTime": end_time_ms,
+                    "limit": 1000,
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            raw = response.json()
+            if not raw:
+                break
+
+            batch = [
+                Candle(
+                    open_time_ms=c[0],
+                    open=float(c[1]),
+                    high=float(c[2]),
+                    low=float(c[3]),
+                    close=float(c[4]),
+                    volume=float(c[5]),
+                )
+                for c in raw
+            ]
+            candles.extend(batch)
+
+            if len(raw) < 1000:
+                break  # última página — menos de 1000 significa que chegou no fim
+            cursor = batch[-1].open_time_ms + 1
+
+        return candles
+
     def get_current_price(self, symbol: str) -> float | None:
         response = requests.get(
             f"{BASE_URL}/ticker/price", params={"symbol": symbol}, timeout=self.timeout

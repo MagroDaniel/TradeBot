@@ -15,32 +15,15 @@ from datetime import datetime, timedelta, timezone
 
 import config
 from alerts.telegram_notifier import TelegramNotifier
+from analysis.outcomes import check_outcome
 from analysis.performance import summarize
 from analysis.signals import generate_signal
-from data.binance_client import BinanceClient, Candle
+from data.binance_client import BinanceClient
 from data.schedule import date_brt, today_brt
 from storage.signals_store import SignalRecord, SignalsStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
-
-
-def _check_outcome(signal: SignalRecord, candles: list[Candle]) -> tuple[str, float] | None:
-    """Retorna (status, preço de fechamento) se o alvo ou o stop foi tocado em algum candle
-    desde a abertura do sinal — checa o stop primeiro em cada candle (padrão conservador de
-    backtest: evita superestimar acerto quando os dois seriam tocados no mesmo candle)."""
-    for c in candles:
-        if signal.direction == "long":
-            if c.low <= signal.stop_loss:
-                return "stop_hit", signal.stop_loss
-            if c.high >= signal.target:
-                return "target_hit", signal.target
-        else:
-            if c.high >= signal.stop_loss:
-                return "stop_hit", signal.stop_loss
-            if c.low <= signal.target:
-                return "target_hit", signal.target
-    return None
 
 
 def send_daily_report_if_needed(store: SignalsStore, notifier: TelegramNotifier) -> None:
@@ -90,7 +73,7 @@ def resolve_open_signals(client: BinanceClient, store: SignalsStore, notifier: T
         opened_at_ms = int(opened_at.timestamp() * 1000)
         relevant = [c for c in candles if c.open_time_ms >= opened_at_ms]
 
-        outcome = _check_outcome(signal, relevant)
+        outcome = check_outcome(signal, relevant)
         if outcome is None and now - opened_at > timedelta(hours=config.SIGNAL_EXPIRY_HOURS):
             last_close = relevant[-1].close if relevant else signal.entry
             outcome = ("expired", last_close)

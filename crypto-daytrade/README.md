@@ -92,6 +92,21 @@ Os testes cobrem os indicadores técnicos, a geração de sinal, o resumo de per
 formatação das mensagens — não fazem chamadas de rede, então rodam sem precisar de
 credenciais.
 
+## Backtest
+
+Antes de mudar a estratégia (`analysis/signals.py`), dá pra validar contra meses de histórico
+real da Binance em vez de só observar sinais ao vivo (amostra pequena, lenta de acumular):
+
+```bash
+python -m backtest.run --days 90
+```
+
+Roda a estratégia atual e algumas variantes com filtro (ADX, tendência de timeframe maior,
+limite de posições correlacionadas) lado a lado contra o mesmo histórico, e imprime uma tabela
+comparando win rate, expectância em R e drawdown máximo de cada uma. Ver `backtest/` e o
+CLAUDE.md (seção "Backtest walk-forward") pra detalhes de como funciona e o resultado da última
+rodada.
+
 ## Automação (GitHub Actions)
 
 Workflow em `../.github/workflows/crypto_daytrade.yml` (raiz do repositório Git) — roda a
@@ -126,13 +141,20 @@ crypto-daytrade/
 │   ├── binance_client.py      # top pares por volume + candles (klines)
 │   └── schedule.py            # utilitários de data/hora em BRT (corte do relatório diário)
 ├── analysis/
-│   ├── indicators.py          # EMA, RSI, ATR (funções puras)
+│   ├── indicators.py          # EMA, RSI, ATR, ADX (funções puras)
 │   ├── signals.py             # decide entrada/stop/alvo a partir dos indicadores
+│   ├── outcomes.py            # decide se um sinal bateu stop/alvo (usado por main.py e backtest)
 │   └── performance.py         # resume o histórico real de acerto/erro
 ├── storage/
 │   └── signals_store.py       # rastreia sinais emitidos e seus resultados
 ├── alerts/
 │   └── telegram_notifier.py   # formatação e envio das mensagens
+├── backtest/
+│   ├── run.py                 # CLI: roda a estratégia (e variantes) contra histórico real
+│   ├── engine.py               # simulação walk-forward multi-símbolo
+│   ├── history.py             # busca + cacheia candles históricos
+│   ├── filters.py             # filtros opcionais (ADX, tendência de timeframe maior)
+│   └── report.py              # métricas por variante (win rate, expectância em R, drawdown)
 └── tests/
 ```
 
@@ -140,10 +162,13 @@ crypto-daytrade/
 
 - **Só Binance, só EMA+RSI+ATR** — sem outros indicadores (MACD, Bollinger, volume profile
   etc.) nem outras exchanges por enquanto.
-- **Sem backtest histórico** — a performance só é rastreada a partir de agora
-  (`storage/signals.json` começa vazio); não há validação contra anos de dados passados
-  antes do primeiro sinal real.
+- **Backtest usa o top-25 por volume de hoje, aplicado retroativamente** — não reconstrói qual
+  era o top-25 dia a dia no passado; símbolo listado recentemente aparece com histórico curto.
+  Não invalida a comparação entre variantes (todas rodam contra o mesmo conjunto), mas o número
+  absoluto de expectância pode mudar se o conjunto de pares mudar.
 - **Mercado lateral gera sinal falso** — limitação conhecida de qualquer estratégia de
-  cruzamento de médias, não é bug.
+  cruzamento de médias, não é bug. Primeiro resultado do backtest (60 dias, 2026-09-09) confirma
+  isso: estratégia atual, sem filtro, tem expectância negativa numa amostra grande — ver
+  CLAUDE.md pro resultado completo e as variantes testadas.
 - Projeto irmão do bot de apostas esportivas (`../sports-betting/`), mesma filosofia — só
   análise e alerta, sem executar nada sozinho.

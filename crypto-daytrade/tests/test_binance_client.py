@@ -88,6 +88,55 @@ def test_get_klines_parses_candles(monkeypatch):
     assert c.volume == 50.0
 
 
+def _raw_candle(open_time_ms: int) -> list:
+    return [open_time_ms, "100.0", "105.0", "95.0", "102.0", "50.0", 0, "0", 0, "0", "0", "0"]
+
+
+def test_get_historical_klines_stops_when_page_is_short(monkeypatch):
+    # só 1 candle devolvido (< 1000) — sinal de que já é a última página, não pagina de novo
+    monkeypatch.setattr(
+        "data.binance_client.requests.get",
+        lambda url, params, timeout: _FakeResponse(200, [_raw_candle(1000)]),
+    )
+
+    candles = BinanceClient().get_historical_klines("BTCUSDT", "15m", start_time_ms=0, end_time_ms=10_000)
+
+    assert len(candles) == 1
+    assert candles[0].open_time_ms == 1000
+
+
+def test_get_historical_klines_pages_until_a_short_page(monkeypatch):
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(params["startTime"])
+        if params["startTime"] == 0:
+            # primeira página cheia (1000 candles) -> tem que pedir mais uma página
+            return _FakeResponse(200, [_raw_candle(i) for i in range(1000)])
+        # segunda página, curta -> é a última
+        return _FakeResponse(200, [_raw_candle(1000)])
+
+    monkeypatch.setattr("data.binance_client.requests.get", fake_get)
+
+    candles = BinanceClient().get_historical_klines(
+        "BTCUSDT", "15m", start_time_ms=0, end_time_ms=2000
+    )
+
+    assert len(calls) == 2
+    assert calls[1] == 1000  # open_time do último candle da 1a página (999) + 1ms
+    assert len(candles) == 1001
+
+
+def test_get_historical_klines_stops_on_empty_page(monkeypatch):
+    monkeypatch.setattr(
+        "data.binance_client.requests.get", lambda url, params, timeout: _FakeResponse(200, [])
+    )
+
+    candles = BinanceClient().get_historical_klines("BTCUSDT", "15m", start_time_ms=0, end_time_ms=10_000)
+
+    assert candles == []
+
+
 def test_get_current_price_returns_none_on_error(monkeypatch):
     monkeypatch.setattr(
         "data.binance_client.requests.get",
