@@ -124,3 +124,28 @@ def adx(highs: list[float], lows: list[float], closes: list[float], period: int 
         return []
 
     return _wilder_smooth(dx_values)
+
+
+def bollinger_bands(
+    values: list[float], period: int = 20, num_std: float = 2.0
+) -> tuple[list[float], list[float], list[float]]:
+    """Bandas de Bollinger — SMA(period) como banda central, +/- `num_std` desvios padrão
+    (populacional, sobre a própria janela) pras bandas superior/inferior. Usado por
+    `analysis/mean_reversion_signals.py` (adicionado 2026-09-09): mede se o preço está
+    "esticado" longe da média recente, ao contrário de EMA9/EMA21 que mede cruzamento de
+    tendência. Retorna (superior, central, inferior), mesmo tamanho, alinhadas ao candle mais
+    recente em [-1] — segue a mesma convenção de `ema`/`rsi`/`atr` (lista vazia se não tiver
+    `period` valores ainda)."""
+    if len(values) < period:
+        return [], [], []
+
+    upper, middle, lower = [], [], []
+    for i in range(period - 1, len(values)):
+        window = values[i - period + 1 : i + 1]
+        mean = sum(window) / period
+        variance = sum((v - mean) ** 2 for v in window) / period
+        std = variance**0.5
+        middle.append(mean)
+        upper.append(mean + num_std * std)
+        lower.append(mean - num_std * std)
+    return upper, middle, lower

@@ -1,6 +1,6 @@
 import pytest
 
-from analysis.indicators import adx, atr, ema, rsi
+from analysis.indicators import adx, atr, bollinger_bands, ema, rsi
 
 
 def test_ema_of_constant_series_equals_the_constant():
@@ -98,3 +98,35 @@ def test_adx_is_low_for_a_sideways_market():
 
 def test_adx_returns_empty_when_not_enough_data():
     assert adx([1.0, 2.0], [1.0, 2.0], [1.0, 2.0], period=14) == []
+
+
+def test_bollinger_bands_of_constant_series_has_zero_width():
+    prices = [100.0] * 25
+    upper, middle, lower = bollinger_bands(prices, period=20, num_std=2.0)
+
+    assert upper and middle and lower
+    assert all(v == pytest.approx(100.0) for v in upper)
+    assert all(v == pytest.approx(100.0) for v in middle)
+    assert all(v == pytest.approx(100.0) for v in lower)
+
+
+def test_bollinger_bands_widens_with_more_volatility():
+    steady = [100.0] * 25
+    volatile = [100.0 + (5.0 if i % 2 == 0 else -5.0) for i in range(25)]
+
+    steady_upper, _, steady_lower = bollinger_bands(steady, period=20)
+    volatile_upper, _, volatile_lower = bollinger_bands(volatile, period=20)
+
+    assert (volatile_upper[-1] - volatile_lower[-1]) > (steady_upper[-1] - steady_lower[-1])
+
+
+def test_bollinger_bands_middle_is_the_simple_moving_average():
+    prices = [100.0 + i for i in range(25)]  # rampa linear, SMA fácil de conferir de cabeça
+    _, middle, _ = bollinger_bands(prices, period=20)
+
+    expected_sma = sum(prices[-20:]) / 20
+    assert middle[-1] == pytest.approx(expected_sma)
+
+
+def test_bollinger_bands_returns_empty_when_not_enough_data():
+    assert bollinger_bands([1.0, 2.0], period=20) == ([], [], [])
