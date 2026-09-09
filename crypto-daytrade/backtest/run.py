@@ -66,6 +66,18 @@ VARIANTS = [
     # continua fixo), então isso alarga entrada/stop/alvo proporcionalmente, não só o stop.
     Variant(name="+ 1h + ATR stop 2x", use_htf_trend_filter=True, atr_stop_multiplier=2.0),
     Variant(name="+ 1h + ATR stop 3x", use_htf_trend_filter=True, atr_stop_multiplier=3.0),
+    # Item 3 da lista priorizada — a faixa de RSI já é por direção (long/short), e como o
+    # sinal só confirma quando o 1h concorda com a direção, a faixa aceita já representa um
+    # regime confirmado. Constance Brown (citada no livro Análise Técnica) sugere que em
+    # tendência de alta o RSI oscila mais entre 40-90 (não 0-100), e em baixa entre 10-60 —
+    # bem mais largo que o (30,65)/(35,70) atual do bot, que rejeita sinal só por RSI já
+    # elevado mesmo com tendência forte confirmada.
+    Variant(
+        name="+ 1h + RSI faixa Constance Brown (40-90 / 10-60)",
+        use_htf_trend_filter=True,
+        long_rsi_range=(40.0, 90.0),
+        short_rsi_range=(10.0, 60.0),
+    ),
 ]
 
 

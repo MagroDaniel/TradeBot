@@ -8,6 +8,8 @@ from analysis.signals import (
 )
 from data.binance_client import Candle
 
+_UNREACHABLE_RSI_RANGE = (200.0, 300.0)  # nunca bate — usado pra provar que o parâmetro é respeitado
+
 
 def _candles_from_closes(closes: list[float]) -> list[Candle]:
     return [
@@ -92,6 +94,35 @@ def test_atr_stop_multiplier_parameter_widens_stop_and_target_proportionally():
     assert (wider_signal.target - wider_signal.entry) == pytest.approx(
         wider_risk * RISK_REWARD_RATIO
     )
+
+
+def test_long_rsi_range_parameter_blocks_signal_outside_custom_range():
+    candles = _candles_from_closes(_decline_then_rise())
+    assert generate_signal("TESTUSDT", candles) is not None  # RSI ~63 confirma a faixa padrão
+
+    blocked = generate_signal("TESTUSDT", candles, long_rsi_range=_UNREACHABLE_RSI_RANGE)
+    assert blocked is None
+
+
+def test_short_rsi_range_parameter_blocks_signal_outside_custom_range():
+    candles = _candles_from_closes(_rise_then_decline())
+    assert generate_signal("TESTUSDT", candles) is not None  # RSI ~37 confirma a faixa padrão
+
+    blocked = generate_signal("TESTUSDT", candles, short_rsi_range=_UNREACHABLE_RSI_RANGE)
+    assert blocked is None
+
+
+def test_long_rsi_range_parameter_allows_signal_default_range_would_reject():
+    # sequência de alta mais forte empurra o RSI do cruzamento pra ~69 (fora da faixa padrão
+    # de 30-65, dentro de uma faixa mais larga tipo a de Constance Brown, 40-90) — validado
+    # empiricamente, mesmo espírito dos outros fixtures deste arquivo
+    candles = _candles_from_closes(_decline_then_rise(rise_candles=6, rise_step=0.4))
+    assert generate_signal("TESTUSDT", candles) is None  # faixa padrão rejeita, RSI alto demais
+
+    wider_signal = generate_signal("TESTUSDT", candles, long_rsi_range=(40.0, 90.0))
+    assert wider_signal is not None
+    assert wider_signal.direction == "long"
+    assert wider_signal.rsi_value > 65
 
 
 def test_no_signal_on_flat_price_series():

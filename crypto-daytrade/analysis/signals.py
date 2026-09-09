@@ -67,6 +67,8 @@ def generate_signal(
     candles: list[Candle],
     higher_tf_candles: list[Candle] | None = None,
     atr_stop_multiplier: float = ATR_STOP_MULTIPLIER,
+    long_rsi_range: tuple[float, float] = LONG_RSI_RANGE,
+    short_rsi_range: tuple[float, float] = SHORT_RSI_RANGE,
 ) -> Signal | None:
     """None quando não há sinal (a maioria dos candles — sinal é evento raro por design,
     não um palpite a cada execução), quando o histórico é curto demais pros indicadores, ou
@@ -78,7 +80,13 @@ def generate_signal(
     existe como parâmetro pra comparar múltiplos maiores no backtest (ver
     `docs/estrategias_extraidas_livros.md`) sem duplicar a lógica de geração de sinal.
     Alvo continua `RISK_REWARD_RATIO` vezes o risco, então mudar o múltiplo também alarga o
-    alvo proporcionalmente — mantém o R:R fixo, só muda a distância em preço."""
+    alvo proporcionalmente — mantém o R:R fixo, só muda a distância em preço.
+
+    `long_rsi_range`/`short_rsi_range` têm default igual às constantes de produção
+    (`LONG_RSI_RANGE`/`SHORT_RSI_RANGE`) — mesmo espírito, pra comparar faixas de RSI
+    deslocadas por regime (ideia de Constance Brown citada no livro Análise Técnica: já que o
+    sinal só confirma quando `higher_tf_candles` concorda com a direção, a faixa aceita já
+    representa um regime confirmado, não precisa recalcular nada novo)."""
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
     lows = [c.low for c in candles]
@@ -103,7 +111,7 @@ def generate_signal(
     crossed_up = fast_prev <= slow_prev and fast_now > slow_now
     crossed_down = fast_prev >= slow_prev and fast_now < slow_now
 
-    if crossed_up and LONG_RSI_RANGE[0] <= rsi_now <= LONG_RSI_RANGE[1]:
+    if crossed_up and long_rsi_range[0] <= rsi_now <= long_rsi_range[1]:
         if higher_tf_candles is not None and not confirms_higher_timeframe_trend(
             higher_tf_candles, "long"
         ):
@@ -117,7 +125,7 @@ def generate_signal(
         )
         return Signal(symbol, "long", entry, stop_loss, target, rsi_now, reason)
 
-    if crossed_down and SHORT_RSI_RANGE[0] <= rsi_now <= SHORT_RSI_RANGE[1]:
+    if crossed_down and short_rsi_range[0] <= rsi_now <= short_rsi_range[1]:
         if higher_tf_candles is not None and not confirms_higher_timeframe_trend(
             higher_tf_candles, "short"
         ):

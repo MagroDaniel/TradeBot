@@ -15,7 +15,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from analysis.outcomes import check_outcome
-from analysis.signals import ATR_STOP_MULTIPLIER, generate_signal
+from analysis.signals import (
+    ATR_STOP_MULTIPLIER,
+    LONG_RSI_RANGE,
+    SHORT_RSI_RANGE,
+    generate_signal,
+)
 from backtest.filters import passes_adx_filter, passes_signal_candle_quality_filter
 from data.binance_client import Candle
 from storage.signals_store import SignalRecord
@@ -35,6 +40,8 @@ class Variant:
     max_concurrent_same_direction: int | None = None  # None = sem limite
     min_signal_candle_close_position: float | None = None  # None = sem filtro de qualidade
     atr_stop_multiplier: float | None = None  # None = usa o default de produção (ATR_STOP_MULTIPLIER)
+    long_rsi_range: tuple[float, float] | None = None  # None = usa LONG_RSI_RANGE de produção
+    short_rsi_range: tuple[float, float] | None = None  # None = usa SHORT_RSI_RANGE de produção
 
 
 @dataclass
@@ -139,6 +146,8 @@ def run_backtest(
                 window,
                 higher_tf_candles=htf_window,
                 atr_stop_multiplier=variant.atr_stop_multiplier or ATR_STOP_MULTIPLIER,
+                long_rsi_range=variant.long_rsi_range or LONG_RSI_RANGE,
+                short_rsi_range=variant.short_rsi_range or SHORT_RSI_RANGE,
             )
             if signal is None:
                 continue
