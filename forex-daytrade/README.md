@@ -150,21 +150,49 @@ nenhuma das 3 janelas** — bot continua fora de produção.
 | Cruzamento EMA, 1h + sessão + tendência 4h | -0.13 / -0.07 / -0.18 |
 | Reversão à média (Bollinger+RSI), 1h, baseline | **-0.02** / -0.08 / -0.20 |
 
+## Teste de generalização — GBP/USD (2026-09-09, mesmo dia) — resultado desanima
+
+Usuário perguntou sobre alavancagem (resposta: não ajuda estratégia com expectância negativa,
+só amplia — ver commit) e pediu pra continuar testando. Próximo passo natural: será que a
+baseline promissora de mean reversion em EUR/USD se repete em outro par, ou foi coincidência?
+
+| Janela | variante | sinais | win% | R líq |
+|---|---|---|---|---|
+| 60d | baseline | 49 | 30.2% | -0.24 |
+| 60d | + BB 2.5 desvios | 41 | 32.4% | -0.23 |
+| 180d | baseline | 135 | 38.3% | **+0.06** |
+| 180d | + BB 2.5 desvios | 105 | 39.6% | **+0.09** |
+| 365d | baseline | 246 | 31.2% | -0.08 |
+| 365d | + BB 2.5 desvios | 171 | 35.1% | +0.01 |
+
+**Achado (não é bom)**: a baseline de GBP/USD **oscila de sinal entre janelas** — negativa aos
+60d, positiva aos 180d, negativa de novo aos 365d. Isso é a assinatura clássica de ruído
+estatístico, não de edge real: um edge genuíno mantém o sinal mesmo variando a magnitude; essa
+oscilação sugere que o resultado de qualquer janela isolada (inclusive o -0.02 promissor de
+EUR/USD aos 60 dias) está mais perto de "moeda ao ar" que de vantagem estatística persistente.
+`+ BB 2.5 desvios` chega perto de zero nas 3 janelas (-0.23/+0.09/+0.01) — mais estável que a
+baseline, mas ainda sem cruzar pra positivo de forma consistente.
+
+**Conclusão honesta, depois de 4 abordagens testadas (baseline herdada, recalibração de
+tendência com sessão, mean reversion em EUR/USD, mean reversion em GBP/USD)**: nenhuma mostrou
+expectância positiva **consistente** (mesmo sinal, não só magnitude) nas 3 janelas E em mais
+de 1 par. O resultado mais perto disso é `+ BB 2.5 desvios` em GBP/USD, oscilando bem perto de
+zero — não dá pra descartar que seja edge real fraco, mas também não dá pra confirmar que não é
+ruído. Bot continua fora de produção.
+
 ## Próximos passos (nenhum feito ainda — decisão em aberto)
 
-1. Testar mean reversion em mais pares (GBP/USD, USD/JPY) — se a mesma baseline funcionar
-   melhor em outro par, é sinal de edge real de abordagem, não coincidência de um símbolo só.
-2. Refinar o alvo de mean reversion (hoje é a banda central CONGELADA no momento do sinal —
-   simplificação deliberada; um alvo dinâmico, que acompanha a banda central se movendo, pode
-   capturar mais lucro numa reversão forte).
-3. Testar outros timeframes pra mean reversion (15min, 4h) — só foi testado em 1h até agora.
-4. Ou considerar esse caminho fechado por ora — depois de 3 abordagens testadas (baseline
-   herdada, recalibração de tendência, mean reversion), nenhuma cruzou pra expectância
-   positiva de forma consistente nas 3 janelas.
+1. Testar um terceiro par (USD/JPY) pra desempatar — se ele também oscilar de sinal como
+   GBP/USD, reforça a leitura de ruído; se convergir com EUR/USD ou GBP/USD, ajuda a decidir.
+2. Juntar os 3 pares numa MESMA rodada de backtest (universo, não símbolo único) — aumenta o
+   tamanho de amostra agregada, mais poder estatístico que testar par por par isoladamente.
+3. Refinar o alvo de mean reversion (hoje é a banda central CONGELADA no momento do sinal).
+4. Ou aceitar que, com o tempo e dado já investidos, nenhuma abordagem testada tem edge
+   comprovado o bastante pra ir pra produção — encerrar por ora.
 
-Infraestrutura (indicadores — incluindo Bollinger Bands agora —, dois motores de backtest sem
-viés de look-ahead, cliente da Twelve Data, storage, Telegram, CLIs configuráveis) está pronta
-e testada (124 testes) pra qualquer um dos quatro caminhos.
+Infraestrutura (indicadores — incluindo Bollinger Bands —, dois motores de backtest sem viés
+de look-ahead, cliente da Twelve Data, storage, Telegram, CLIs configuráveis com --symbols)
+está pronta e testada (124 testes) pra qualquer um dos quatro caminhos.
 
 ## Decisões já tomadas
 
