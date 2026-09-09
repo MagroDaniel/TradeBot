@@ -1,0 +1,73 @@
+name: Forex — Backtest (temporário)
+
+# Workflow temporário pra rodar backtests do forex-daytrade dentro do Actions (esta sessão não
+# tem saída de rede até a Twelve Data). Sem gatilho de schedule — só disparo manual. Remover
+# depois de decidir sobre a estratégia de reversão à média (ver forex-daytrade/README.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Quantos dias de histórico buscar"
+        required: false
+        default: "60"
+      strategy:
+        description: "trend (cruzamento de EMA) ou mean_reversion (Bollinger+RSI)"
+        required: false
+        default: "mean_reversion"
+      timeframe:
+        description: "Timeframe dos candles de sinal (ex: 15min, 1h)"
+        required: false
+        default: "1h"
+      higher_timeframe:
+        description: "Timeframe do filtro de tendência maior (só estratégia trend)"
+        required: false
+        default: ""
+      symbols:
+        description: "Pares separados por vírgula (ex: GBP/USD). Vazio = config.BACKTEST_SYMBOLS"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: forex-daytrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Rodar backtest
+        env:
+          TELEGRAM_BOT_TOKEN: dummy-for-backtest-only
+          TELEGRAM_CHAT_ID: dummy-for-backtest-only
+          TWELVEDATA_API_KEY: ${{ secrets.FOREX_TWELVEDATA_API_KEY }}
+        run: |
+          SYMBOLS_ARG=""
+          if [ -n "${{ github.event.inputs.symbols }}" ]; then
+            SYMBOLS_ARG="--symbols ${{ github.event.inputs.symbols }}"
+          fi
+          if [ "${{ github.event.inputs.strategy }}" = "trend" ]; then
+            ARGS="--days ${{ github.event.inputs.days }} $SYMBOLS_ARG"
+            if [ -n "${{ github.event.inputs.timeframe }}" ]; then
+              ARGS="$ARGS --timeframe ${{ github.event.inputs.timeframe }}"
+            fi
+            if [ -n "${{ github.event.inputs.higher_timeframe }}" ]; then
+              ARGS="$ARGS --higher-timeframe ${{ github.event.inputs.higher_timeframe }}"
+            fi
+            echo "python -m backtest.run $ARGS"
+            python -m backtest.run $ARGS
+          else
+            ARGS="--days ${{ github.event.inputs.days }} --timeframe ${{ github.event.inputs.timeframe }} $SYMBOLS_ARG"
+            echo "python -m backtest.run_mean_reversion $ARGS"
+            python -m backtest.run_mean_reversion $ARGS
+          fi
