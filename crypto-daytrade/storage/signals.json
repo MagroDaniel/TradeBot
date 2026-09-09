@@ -139,9 +139,9 @@
       "rsi_value": 57.554814861761876,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 58 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:10:29.574957+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T03:20:21.063876+00:00",
+      "close_price": 103.19930777046214
     },
     {
       "symbol": "AVAXUSDT",
@@ -204,9 +204,9 @@
       "rsi_value": 53.07992525505509,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 53 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:50:32.675817+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T03:20:21.063876+00:00",
+      "close_price": 0.15894490741542266
     },
     {
       "symbol": "AVAXUSDT",
