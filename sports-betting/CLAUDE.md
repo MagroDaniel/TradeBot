@@ -257,6 +257,13 @@ BRT contra uma data de referência.
 
 ### Checagem de notícias (`data/news_check.py`)
 
+**Desativada em produção desde 09/09/2026** (decisão do usuário) — `.github/workflows/daily_picks.yml`
+não repassa mais `ANTHROPIC_API_KEY` pro job, então `config.ANTHROPIC_API_KEY` vira `None` e
+`main.py::_check_news` retorna `{}` sem chamar nada. Motivo: é puramente informativa (nunca ajusta
+EV/probabilidade, ver abaixo) e consumia token sem influenciar a decisão de nenhum pick — não valia o
+custo. O secret continua guardado no GitHub (não foi apagado) e o código continua existindo e testado;
+reativar é só devolver a linha `ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}` no workflow.
+
 Opcional (requer `config.ANTHROPIC_API_KEY`; sem ela `main.py::_check_news` retorna `{}` direto, sem
 chamar nada) — a **primeira dependência paga** do projeto, ao contrário de todo o resto (Odds API free
 tier, Telegram grátis). `NewsChecker.check_match()` usa `client.messages.create` com a tool

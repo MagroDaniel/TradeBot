@@ -107,7 +107,11 @@ cp .env.example .env
   suspensão) via Claude com busca na web. Pegue a sua em
   [console.anthropic.com](https://console.anthropic.com/) — é a primeira
   dependência paga do projeto (custo pequeno por execução, cobrado por uso).
-  Sem essa chave, o bot funciona normal, só sem esse aviso.
+  Sem essa chave, o bot funciona normal, só sem esse aviso. **Desativada por
+  padrão no workflow atual** (`.github/workflows/daily_picks.yml` não repassa
+  esse secret pro job — decisão consciente, ver CLAUDE.md); pra reativar,
+  devolva a linha `ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}` no
+  workflow.
 
 ### 3. Dados históricos (para calibrar o modelo)
 
