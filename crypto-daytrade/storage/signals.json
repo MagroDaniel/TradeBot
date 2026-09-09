@@ -477,9 +477,9 @@
       "rsi_value": 44.227795080626606,
       "reason": "EMA9 cruzou abaixo da EMA21, RSI em 44 (não sobrevendido)",
       "opened_at": "2026-09-09T11:40:44.121896+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "target_hit",
+      "closed_at": "2026-09-09T15:50:27.867162+00:00",
+      "close_price": 0.004924624239968937
     },
     {
       "symbol": "BTCUSDT",
