@@ -152,9 +152,9 @@
       "rsi_value": 59.95238486219669,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 60 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:10:39.398871+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T00:30:24.124952+00:00",
+      "close_price": 7.992887107861392
     },
     {
       "symbol": "SUIUSDT",
@@ -178,6 +178,19 @@
       "rsi_value": 58.57291615329619,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 59 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:20:30.060171+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "TAOUSDT",
+      "direction": "short",
+      "entry": 258.5,
+      "stop_loss": 260.9124089214361,
+      "target": 253.67518215712778,
+      "rsi_value": 47.17459856982321,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 47 (não sobrevendido)",
+      "opened_at": "2026-09-09T00:30:39.472629+00:00",
       "status": "open",
       "closed_at": null,
       "close_price": null
