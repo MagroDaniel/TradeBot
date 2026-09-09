@@ -155,6 +155,32 @@
       "status": "open",
       "closed_at": null,
       "close_price": null
+    },
+    {
+      "symbol": "SUIUSDT",
+      "direction": "long",
+      "entry": 0.8216,
+      "stop_loss": 0.8133974088066505,
+      "target": 0.8380051823866991,
+      "rsi_value": 58.86006318415185,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 59 (não sobrecomprado)",
+      "opened_at": "2026-09-09T00:20:27.789111+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "NEARUSDT",
+      "direction": "long",
+      "entry": 2.353,
+      "stop_loss": 2.3203290988983905,
+      "target": 2.4183418022032197,
+      "rsi_value": 58.57291615329619,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 59 (não sobrecomprado)",
+      "opened_at": "2026-09-09T00:20:30.060171+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-08"
