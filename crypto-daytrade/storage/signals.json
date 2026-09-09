@@ -376,6 +376,19 @@
       "status": "stop_hit",
       "closed_at": "2026-09-09T08:20:24.319592+00:00",
       "close_price": 6.8632994586230405
+    },
+    {
+      "symbol": "LINKUSDT",
+      "direction": "short",
+      "entry": 12.501,
+      "stop_loss": 12.57765892978042,
+      "target": 12.34768214043916,
+      "rsi_value": 46.28682958038486,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 46 (não sobrevendido)",
+      "opened_at": "2026-09-09T08:30:53.090280+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-09"
