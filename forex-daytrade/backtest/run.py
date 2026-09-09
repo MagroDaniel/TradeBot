@@ -3,13 +3,16 @@ histórico real da Twelve Data, pra decidir com dado (não achismo) se vale a pe
 filtro em `analysis/signals.py`/`config.py`. Mesmo padrão de `crypto-daytrade/backtest/run.py`.
 
 Uso:
-    python -m backtest.run                 # 90 dias, FOREX_SYMBOLS configurado
+    python -m backtest.run                 # 90 dias, FOREX_SYMBOLS, timeframe de config.py
     python -m backtest.run --days 30
     python -m backtest.run --symbols EUR/USD,GBP/USD
+    python -m backtest.run --timeframe 1h --higher-timeframe 4h   # candidato de recalibração
 
-Primeira rodada de sempre pra este módulo — ainda não existe nenhuma decisão de produção
-tomada aqui (ver README.md), só a pergunta em aberto "essa estratégia tem expectância positiva
-em forex, do jeito que já está calibrada pra cripto?".
+A baseline com os parâmetros herdados do cripto (RSI 30-65/35-70, ATR 1.5x, timeframe de
+15min) foi testada e REPROVADA em 2 janelas reais (60/180 dias) — expectância negativa
+consistente, todo filtro piora em vez de melhorar (ver README.md). `--timeframe`/
+`--higher-timeframe` existem pra testar a hipótese de que o candle de 15min é ruidoso demais
+pra forex (volatilidade bem menor que cripto) sem precisar editar código a cada tentativa.
 """
 from __future__ import annotations
 
@@ -27,14 +30,20 @@ from data.twelvedata_client import TwelveDataClient
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-HIGHER_TIMEFRAME = "1h"
 
-VARIANTS = [
-    Variant(name="sem filtro (baseline)"),
-    Variant(name="+ tendência 1h", use_htf_trend_filter=True),
-    Variant(name="+ ADX >= 25", min_adx=25.0),
-    Variant(name="+ ADX + tendência 1h", min_adx=25.0, use_htf_trend_filter=True),
-]
+def _variants_for(higher_timeframe: str) -> list[Variant]:
+    return [
+        Variant(name="sem filtro (baseline)"),
+        Variant(name=f"+ tendência {higher_timeframe}", use_htf_trend_filter=True),
+        Variant(name="+ ADX >= 25", min_adx=25.0),
+        Variant(name=f"+ ADX + tendência {higher_timeframe}", min_adx=25.0, use_htf_trend_filter=True),
+        # candidatos de recalibração (item pedido pelo usuário depois da baseline reprovada,
+        # 2026-09-09) — ATR mais apertado, já que a hipótese é ruído/whipsaw, não risco mal
+        # dimensionado; RSI mais estreito, menos permissivo com cruzamento fraco.
+        Variant(name="+ ATR stop 1.0x", atr_stop_multiplier=1.0),
+        Variant(name="+ ATR stop 2.5x", atr_stop_multiplier=2.5),
+        Variant(name="+ RSI estreito (40-60/40-60)", long_rsi_range=(40.0, 60.0), short_rsi_range=(40.0, 60.0)),
+    ]
 
 
 def _parse_args() -> argparse.Namespace:
@@ -46,6 +55,18 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Lista separada por vírgula (ex: EUR/USD,GBP/USD). Sobrescreve config.BACKTEST_SYMBOLS.",
     )
+    parser.add_argument(
+        "--timeframe",
+        type=str,
+        default=None,
+        help="Intervalo dos candles de sinal (formato Twelve Data: 15min, 1h...). Sobrescreve config.TIMEFRAME.",
+    )
+    parser.add_argument(
+        "--higher-timeframe",
+        type=str,
+        default=None,
+        help="Intervalo do filtro de tendência maior. Default: 1h, ou 4h se --timeframe=1h.",
+    )
     return parser.parse_args()
 
 
@@ -54,7 +75,9 @@ def main() -> None:
     client = TwelveDataClient(config.TWELVEDATA_API_KEY)
 
     symbols = [s.strip().upper() for s in args.symbols.split(",")] if args.symbols else list(config.BACKTEST_SYMBOLS)
-    logger.info("Símbolos: %s", ", ".join(symbols))
+    timeframe = args.timeframe or config.TIMEFRAME
+    higher_timeframe = args.higher_timeframe or ("4h" if timeframe == "1h" else "1h")
+    logger.info("Símbolos: %s | timeframe: %s | htf: %s", ", ".join(symbols), timeframe, higher_timeframe)
 
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=args.days)
@@ -64,13 +87,13 @@ def main() -> None:
     higher_tf_by_symbol = {}
     for i, symbol in enumerate(symbols, 1):
         t0 = time.monotonic()
-        candles_by_symbol[symbol] = fetch_candles(client, symbol, config.TIMEFRAME, start_ms, end_ms)
-        higher_tf_by_symbol[symbol] = fetch_candles(client, symbol, HIGHER_TIMEFRAME, start_ms, end_ms)
+        candles_by_symbol[symbol] = fetch_candles(client, symbol, timeframe, start_ms, end_ms)
+        higher_tf_by_symbol[symbol] = fetch_candles(client, symbol, higher_timeframe, start_ms, end_ms)
         logger.info(
             "[%d/%d] %s: %d candles %s + %d candles %s (%.1fs)",
             i, len(symbols), symbol,
-            len(candles_by_symbol[symbol]), config.TIMEFRAME,
-            len(higher_tf_by_symbol[symbol]), HIGHER_TIMEFRAME,
+            len(candles_by_symbol[symbol]), timeframe,
+            len(higher_tf_by_symbol[symbol]), higher_timeframe,
             time.monotonic() - t0,
         )
         # diagnóstico: confere se a cobertura de datas bate com o período pedido — pega erro
@@ -88,7 +111,7 @@ def main() -> None:
         slippage_rate=config.BACKTEST_SLIPPAGE_RATE,
         funding_rate_per_8h=config.BACKTEST_FUNDING_RATE_PER_8H,
     )
-    for variant in VARIANTS:
+    for variant in _variants_for(higher_timeframe):
         result = run_backtest(
             candles_by_symbol,
             variant,
@@ -99,7 +122,7 @@ def main() -> None:
         reports.append(build_report(result, costs=costs))
 
     print()
-    print(f"Backtest: {len(symbols)} par(es), {args.days} dias, timeframe {config.TIMEFRAME}")
+    print(f"Backtest: {len(symbols)} par(es), {args.days} dias, timeframe {timeframe}")
     print(f"Período: {start.date()} a {end.date()}")
     print()
     print(format_report_table(reports))
