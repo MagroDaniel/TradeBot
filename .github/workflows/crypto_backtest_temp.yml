@@ -1,0 +1,40 @@
+name: Crypto Daytrade — Backtest (temporário)
+
+# Workflow temporário só pra rodar o backtest dentro do Actions, reaproveitando o proxy da
+# Binance já configurado (CRYPTO_BINANCE_PROXY_URL) já que o ambiente que gerou este workflow
+# não tinha saída de rede até a Binance. Sem gatilho de schedule — só disparo manual. Recriado
+# em 2026-09-09 pra revalidar o filtro de range por estrutura de preço (item 4) sob o engine de
+# backtest corrigido (viés de look-ahead + custo de execução). Remover depois de concluir.
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Quantos dias de histórico buscar"
+        required: false
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crypto-daytrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Rodar backtest
+        env:
+          TELEGRAM_BOT_TOKEN: dummy-for-backtest-only
+          TELEGRAM_CHAT_ID: dummy-for-backtest-only
+          BINANCE_API_BASE_URL: ${{ secrets.CRYPTO_BINANCE_PROXY_URL }}
+        run: python -m backtest.run --days ${{ github.event.inputs.days }}
