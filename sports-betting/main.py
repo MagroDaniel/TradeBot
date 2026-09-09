@@ -18,7 +18,7 @@ from pathlib import Path
 
 import config
 from alerts.telegram_notifier import TelegramNotifier
-from analysis.ev import calculate_ev
+from analysis.ev import calculate_ev, market_hold
 from analysis.kelly import capped_stake
 from analysis.multiple import Multiple, MultipleLeg, build_multiple
 from data.historical_loader import load_matches_from_csv
@@ -168,6 +168,38 @@ class SelectionCandidate:
     bookmaker: str
     model_probability: float
     ev: float
+    market_hold: float | None = None  # ver _synthetic_holds_by_selection
+
+
+def _market_partitions(home_team: str, away_team: str) -> dict[str, list[str]]:
+    """Mercados completos e mutuamente exclusivos do evento — usados pra calcular o hold
+    sintético (ver `analysis/ev.py::market_hold`). Dupla chance fica de fora: suas 3 seleções se
+    sobrepõem (mandante-ou-empate + visitante-ou-empate + mandante-ou-visitante somam mais que
+    o "mercado" de verdade), então soma de probabilidade implícita não tem o mesmo significado."""
+    return {
+        "1x2": [f"{home_team} vence", "Empate", f"{away_team} vence"],
+        "over_under_2_5": ["Over 2.5 gols", "Under 2.5 gols"],
+        "btts": ["Ambas marcam", "Ambas não marcam"],
+    }
+
+
+def _synthetic_holds_by_selection(
+    best_odds: dict[str, tuple[float, str]], home_team: str, away_team: str
+) -> dict[str, float]:
+    """Hold sintético de cada mercado completo (melhor odd por seleção, possivelmente vinda de
+    casas diferentes — ver docs/estrategias_extraidas_livros.md, item 1), replicado pra cada
+    seleção do mercado, pra virar um lookup direto em `_selection_candidates`. Mercado com
+    alguma perna sem odd cotada (ex: mercado adicional não buscado) fica de fora do dict —
+    hold sintético incompleto não tem o mesmo significado."""
+    holds: dict[str, float] = {}
+    for selections in _market_partitions(home_team, away_team).values():
+        odds = [best_odds[s][0] for s in selections if s in best_odds]
+        if len(odds) != len(selections):
+            continue
+        hold = market_hold(odds)
+        for selection in selections:
+            holds[selection] = hold
+    return holds
 
 
 def _selection_candidates(event: dict, model: PoissonModel) -> list[SelectionCandidate]:
@@ -186,6 +218,7 @@ def _selection_candidates(event: dict, model: PoissonModel) -> list[SelectionCan
         return []
 
     best_odds = _best_odds_by_selection(event)  # selection -> (odd, casa de apostas)
+    synthetic_holds = _synthetic_holds_by_selection(best_odds, home_team, away_team)
     selection_prob_map = {
         f"{home_team} vence": probs["home_win"],
         "Empate": probs["draw"],
@@ -212,6 +245,7 @@ def _selection_candidates(event: dict, model: PoissonModel) -> list[SelectionCan
                 bookmaker=bookmaker,
                 model_probability=model_prob,
                 ev=calculate_ev(model_prob, odds),
+                market_hold=synthetic_holds.get(selection),
             )
         )
     return candidates
@@ -249,6 +283,7 @@ def _picks_from_candidates(
                 ev=c.ev,
                 suggested_stake_fraction=stake,
                 bookmaker=c.bookmaker,
+                market_hold=c.market_hold,
             )
         )
     return picks

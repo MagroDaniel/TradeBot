@@ -185,6 +185,9 @@ sports-betting/
 │   └── telegram_notifier.py   # formatação e envio das mensagens
 ├── backtest/
 │   └── backtester.py          # ROI / taxa de acerto sobre o histórico
+├── docs/
+│   ├── referencias/            # PDFs de referência (livros sobre apostas esportivas)
+│   └── estrategias_extraidas_livros.md  # ideias extraídas, nada implementado ainda
 └── tests/
 ```
 

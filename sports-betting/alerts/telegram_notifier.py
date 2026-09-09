@@ -40,6 +40,13 @@ _EV_EXPLAINER = (
     "Revise antes de apostar.</i>"
 )
 
+_HOLD_EXPLAINER = (
+    "🔀 <i>hold é a margem sintética do mercado nessa seleção, calculada com a melhor odd de "
+    "cada resultado possível (mandante/empate/visitante, ou over/under, ou ambas marcam) — "
+    "podendo vir de casas diferentes. Hold baixo ou negativo é sinal de que as casas discordam "
+    "entre si, além do que o modelo já indica.</i>"
+)
+
 _MULTIPLE_EXPLAINER = (
     "⚠️ <i>Prioriza probabilidade, não valor — as pernas são as de maior chance do dia, mesmo "
     "sem ser pick +EV. EV combinado costuma ser negativo (a casa cobra margem em cada perna) e "
@@ -67,6 +74,21 @@ class TelegramNotifier:
         if not response.ok:
             logger.error("Falha ao enviar mensagem no Telegram: %s", response.text)
         response.raise_for_status()
+
+        # A API do Telegram sempre devolve um corpo JSON com "ok" — em alguns erros (ex: chat_id
+        # válido mas sem permissão) isso pode vir com HTTP 200 mesmo assim, o que o
+        # raise_for_status() acima não pegaria. Sem essa checagem, um run de sucesso no GitHub
+        # Actions não provava que a mensagem realmente chegou — só que o Telegram respondeu.
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if not payload.get("ok", True):
+            logger.error("Telegram aceitou a requisição mas recusou a mensagem: %s", payload)
+            raise RuntimeError(f"Telegram recusou a mensagem: {payload.get('description', payload)}")
+
+        message_id = payload.get("result", {}).get("message_id")
+        logger.info("Mensagem enviada ao Telegram com sucesso (message_id=%s)", message_id)
 
     def send_results_summary(self, date: str, picks: list[Pick]) -> None:
         display_date = format_date_br(date)
@@ -141,9 +163,11 @@ class TelegramNotifier:
                         sign = "+" if p.ev >= 0 else ""
                         odd_label = f"odd {p.odds:.2f}" + (f" ({p.bookmaker})" if p.bookmaker else "")
                         lines.append(f"   🎯 {p.selection} — {odd_label}")
-                        lines.append(
-                            f"   📈 EV {sign}{p.ev:.0%}  ·  💵 {p.suggested_stake_fraction:.1%} banca"
-                        )
+                        stats_line = f"   📈 EV {sign}{p.ev:.0%}  ·  💵 {p.suggested_stake_fraction:.1%} banca"
+                        if p.market_hold is not None:
+                            hold_sign = "+" if p.market_hold >= 0 else ""
+                            stats_line += f"  ·  🔀 hold {hold_sign}{p.market_hold:.1%}"
+                        lines.append(stats_line)
                     lines.append("")
                 lines.append("")
 
@@ -151,6 +175,9 @@ class TelegramNotifier:
             lines.append(f"<i>{len(picks)} pick(s) em {len(by_competition)} competição(ões) hoje</i>")
             lines.append("")
             lines.append(_EV_EXPLAINER)
+            if any(p.market_hold is not None for p in picks):
+                lines.append("")
+                lines.append(_HOLD_EXPLAINER)
 
         if multiple:
             lines.append("")

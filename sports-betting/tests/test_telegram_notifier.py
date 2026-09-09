@@ -1,3 +1,5 @@
+import pytest
+
 from alerts.telegram_notifier import TelegramNotifier
 from analysis.multiple import Multiple, MultipleLeg
 from storage.picks_store import Pick
@@ -13,6 +15,9 @@ def _capture_sent_text(monkeypatch):
 
         def raise_for_status(self):
             pass
+
+        def json(self):
+            return {"ok": True, "result": {"message_id": 1}}
 
     def _fake_post(url, data, timeout):
         sent["text"] = data["text"]
@@ -159,6 +164,61 @@ def test_send_daily_picks_shows_multiple_even_without_ev_picks(monkeypatch):
     text = sent["text"]
     assert "nenhuma aposta de valor" in text
     assert "Bilhete sugerido" in text
+
+
+def test_send_raises_when_telegram_returns_ok_false_despite_http_200(monkeypatch):
+    """HTTP 2xx não garante que o Telegram aceitou a mensagem — a API sempre devolve um corpo
+    JSON com "ok", e alguns erros (ex: sem permissão no chat) podem vir com status 200 mesmo
+    assim. Sem checar esse campo, um "sucesso" no log não provava entrega real (bug real
+    encontrado ao investigar um caso de mensagem que não chegou)."""
+
+    class _FakeRejectedResponse:
+        ok = True
+        text = ""
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"ok": False, "error_code": 403, "description": "Forbidden: bot was kicked"}
+
+    monkeypatch.setattr(
+        "alerts.telegram_notifier.requests.post", lambda url, data, timeout: _FakeRejectedResponse()
+    )
+
+    with pytest.raises(RuntimeError, match="Forbidden: bot was kicked"):
+        TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", [_pick()])
+
+
+def test_send_daily_picks_shows_market_hold_when_present(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", market_hold=0.018)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    text = sent["text"]
+    assert "hold +1.8%" in text
+    assert "hold é a margem sintética" in text  # rodapé explicativo aparece
+
+
+def test_send_daily_picks_negative_hold_shown_with_minus_sign(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", market_hold=-0.004)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert "hold -0.4%" in sent["text"]
+
+
+def test_send_daily_picks_omits_hold_and_explainer_when_absent(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", market_hold=None)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    text = sent["text"]
+    assert "hold" not in text
+    assert "margem sintética" not in text
 
 
 def test_send_daily_picks_no_games_today(monkeypatch):
