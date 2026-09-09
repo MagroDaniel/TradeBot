@@ -109,23 +109,62 @@ contrário do que a intuição sugeriria.
 R líquido negativo nas 3 janelas (-0.13, -0.07, -0.18) — progresso real, mas não cruza pra
 expectância positiva. Bot continua **fora de produção**.
 
+## Estratégia de reversão à média — Bollinger+RSI (2026-09-09, mesmo dia) — a mais próxima até agora
+
+Implementada do zero (`analysis/mean_reversion_signals.py` + `backtest/mean_reversion_engine.py`
++ `backtest/run_mean_reversion.py`) e testada nas 3 janelas de sempre, timeframe 1h:
+
+| Janela | variante | sinais | win% | R líq |
+|---|---|---|---|---|
+| 60d | baseline (sem filtro) | 42 | 39.5% | **-0.02** |
+| 60d | + sessão Londres+NY | 34 | 36.7% | -0.04 |
+| 60d | + RSI 25/75 | 24 | 30.0% | -0.11 |
+| 60d | + BB 2.5 desvios | 31 | 35.7% | -0.10 |
+| 180d | baseline (sem filtro) | 120 | 34.3% | **-0.08** |
+| 180d | + sessão Londres+NY | 97 | 29.3% | -0.17 |
+| 180d | + RSI 25/75 | 61 | 30.2% | -0.15 |
+| 180d | + BB 2.5 desvios | 90 | 32.9% | -0.08 |
+| 365d | baseline (sem filtro) | 238 | 28.4% | **-0.20** |
+| 365d | + sessão Londres+NY | 197 | 26.2% | -0.25 |
+| 365d | + RSI 25/75 | 127 | 26.6% | -0.18 |
+| 365d | + BB 2.5 desvios | 171 | 26.6% | -0.26 |
+
+**A baseline (sem nenhum filtro extra) é o melhor resultado da sessão inteira** — todo filtro
+testado em cima dela piora, ao contrário do que aconteceu com o cruzamento de EMA (onde filtro
+ajudava). Comparado com o melhor candidato de tendência (sessão + tendência 4h: -0.13/-0.07/
+-0.18 nas mesmas 3 janelas), a baseline de mean reversion é igual ou melhor em 2 das 3 janelas
+(-0.02 e -0.08), **sem precisar de nenhum filtro extra** — sinal de que a abordagem em si (não
+só o parâmetro) está mais alinhada com o comportamento real do mercado.
+
+**Ressalva honesta**: R líquido piora conforme a amostra cresce (-0.02 → -0.08 → -0.20) — o
+mesmo tipo de padrão que já vi virar ruído antes (RSI estreito + tendência). Diferença aqui: é
+a baseline de uma abordagem nova, não uma combinação escolhida a dedo entre várias testadas, o
+que reduz (não elimina) o risco de ser sorte de amostra pequena. Ainda **não é lucrativo em
+nenhuma das 3 janelas** — bot continua fora de produção.
+
+## Balanço geral de tudo testado nesta sessão (2026-09-09)
+
+| Abordagem | melhor R líq (60d / 180d / 365d) |
+|---|---|
+| Cruzamento EMA, 15min (herdado do cripto) | -0.72 / -0.68 / -0.70 (aprox.) |
+| Cruzamento EMA, 1h + sessão + tendência 4h | -0.13 / -0.07 / -0.18 |
+| Reversão à média (Bollinger+RSI), 1h, baseline | **-0.02** / -0.08 / -0.20 |
+
 ## Próximos passos (nenhum feito ainda — decisão em aberto)
 
-1. **Reconsiderar a abordagem, não só o parâmetro**: a pesquisa aponta que forex se comporta
-   mais como reversão à média que como tendência a maior parte do tempo — uma estratégia de
-   mean reversion (Bollinger Bands + RSI, fadar extremos em vez de seguir cruzamento) ataca
-   essa causa raiz diretamente, em vez de tentar consertar uma estratégia de tendência com mais
-   filtro. É esforço maior (indicador novo, gerador de sinal novo, não reaproveita
-   `generate_signal` existente) mas é o candidato mais promissor pela pesquisa.
-2. Testar mais combinações em cima do que já funciona (sessão + tendência 4h + algum terceiro
-   filtro) — risco crescente de overfitting quanto mais se testa na mesma amostra única (só
-   EUR/USD); qualquer nova tentativa precisa passar pelas 3 janelas antes de confiar, mesmo
-   padrão usado acima.
-3. Ou considerar esse caminho fechado por ora.
+1. Testar mean reversion em mais pares (GBP/USD, USD/JPY) — se a mesma baseline funcionar
+   melhor em outro par, é sinal de edge real de abordagem, não coincidência de um símbolo só.
+2. Refinar o alvo de mean reversion (hoje é a banda central CONGELADA no momento do sinal —
+   simplificação deliberada; um alvo dinâmico, que acompanha a banda central se movendo, pode
+   capturar mais lucro numa reversão forte).
+3. Testar outros timeframes pra mean reversion (15min, 4h) — só foi testado em 1h até agora.
+4. Ou considerar esse caminho fechado por ora — depois de 3 abordagens testadas (baseline
+   herdada, recalibração de tendência, mean reversion), nenhuma cruzou pra expectância
+   positiva de forma consistente nas 3 janelas.
 
-Infraestrutura (indicadores, engine de backtest sem viés de look-ahead, cliente da Twelve Data,
-storage, Telegram, CLI com --timeframe/--higher-timeframe configuráveis, filtro de sessão)
-está pronta e testada (105 testes) pra qualquer um dos três caminhos.
+Infraestrutura (indicadores — incluindo Bollinger Bands agora —, dois motores de backtest sem
+viés de look-ahead, cliente da Twelve Data, storage, Telegram, CLIs configuráveis) está pronta
+e testada (124 testes) pra qualquer um dos quatro caminhos.
 
 ## Decisões já tomadas
 
