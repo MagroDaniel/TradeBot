@@ -363,6 +363,19 @@
       "status": "stop_hit",
       "closed_at": "2026-09-09T07:30:24.501483+00:00",
       "close_price": 0.3385584559162618
+    },
+    {
+      "symbol": "UNIUSDT",
+      "direction": "short",
+      "entry": 6.791,
+      "stop_loss": 6.8632994586230405,
+      "target": 6.64640108275392,
+      "rsi_value": 41.264476940814795,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 41 (não sobrevendido)",
+      "opened_at": "2026-09-09T07:50:35.343776+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-09"
