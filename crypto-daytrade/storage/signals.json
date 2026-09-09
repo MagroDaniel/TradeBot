@@ -454,6 +454,32 @@
       "status": "stop_hit",
       "closed_at": "2026-09-09T11:10:21.846470+00:00",
       "close_price": 258.20429993466985
+    },
+    {
+      "symbol": "MARSCOINUSDT",
+      "direction": "short",
+      "entry": 0.1275,
+      "stop_loss": 0.13632024308008261,
+      "target": 0.10985951383983478,
+      "rsi_value": 41.30961329410614,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 41 (não sobrevendido)",
+      "opened_at": "2026-09-09T11:40:39.199002+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "SOPHUSDT",
+      "direction": "short",
+      "entry": 0.00539,
+      "stop_loss": 0.005622687880015531,
+      "target": 0.004924624239968937,
+      "rsi_value": 44.227795080626606,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 44 (não sobrevendido)",
+      "opened_at": "2026-09-09T11:40:44.121896+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-09"
