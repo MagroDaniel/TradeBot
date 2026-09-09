@@ -337,6 +337,19 @@
       "status": "open",
       "closed_at": null,
       "close_price": null
+    },
+    {
+      "symbol": "PROMUSDT",
+      "direction": "long",
+      "entry": 5.992,
+      "stop_loss": 5.884563335825387,
+      "target": 6.206873328349226,
+      "rsi_value": 55.20803921134009,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 55 (não sobrecomprado)",
+      "opened_at": "2026-09-09T05:20:35.530393+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-09"
