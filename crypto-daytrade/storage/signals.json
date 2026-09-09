@@ -516,9 +516,9 @@
       "rsi_value": 62.14736150020176,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 62 (não sobrecomprado)",
       "opened_at": "2026-09-09T12:50:35.121936+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T13:50:28.114253+00:00",
+      "close_price": 2501.369169285976
     },
     {
       "symbol": "MARSCOINUSDT",
@@ -542,6 +542,32 @@
       "rsi_value": 45.59823233883947,
       "reason": "EMA9 cruzou abaixo da EMA21, RSI em 46 (não sobrevendido)",
       "opened_at": "2026-09-09T13:40:39.145267+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "ADAUSDT",
+      "direction": "short",
+      "entry": 0.2192,
+      "stop_loss": 0.221150679400125,
+      "target": 0.21529864119975,
+      "rsi_value": 46.08603778875778,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 46 (não sobrevendido)",
+      "opened_at": "2026-09-09T13:50:43.734167+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "WLDUSDT",
+      "direction": "short",
+      "entry": 0.4502,
+      "stop_loss": 0.4553523453455059,
+      "target": 0.4398953093089882,
+      "rsi_value": 46.71539322629256,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 47 (não sobrevendido)",
+      "opened_at": "2026-09-09T13:50:51.396368+00:00",
       "status": "open",
       "closed_at": null,
       "close_price": null
