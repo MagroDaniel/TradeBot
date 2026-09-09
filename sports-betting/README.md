@@ -23,7 +23,12 @@ só analisa e alerta. A decisão e execução ficam com você.
 4. **EV** — compara a probabilidade do modelo com a odd oferecida pelo mercado.
    Se `(prob_modelo × odd) - 1` passar do limiar configurado, vira um "pick".
 5. **Stake** — sugere o tamanho da aposta via critério de Kelly fracionário
-   (25% do Kelly cheio, por padrão), com um teto de segurança (3% da banca).
+   (25% do Kelly cheio, por padrão), com um teto de segurança (3% da banca) —
+   aplicado tanto por aposta quanto **somado por jogo**: apostas em mercados
+   diferentes do mesmo jogo não são independentes entre si (tendem a ganhar ou
+   perder juntas), então o bot reduz proporcionalmente o stake de todas elas
+   se a soma passar do teto, em vez de deixar um jogo só concentrar várias
+   vezes o percentual pretendido.
 6. **Notícias (opcional)** — pros jogos que geraram pick, checa via Claude
    (busca na web) se há lesão/suspensão/desfalque relevante e anexa um aviso
    curto na mensagem. **Não muda o cálculo do EV nem da probabilidade** — é
