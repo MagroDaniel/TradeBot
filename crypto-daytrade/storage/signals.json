@@ -503,9 +503,9 @@
       "rsi_value": 51.91834527087624,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 52 (não sobrecomprado)",
       "opened_at": "2026-09-09T12:20:49.070320+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "target_hit",
+      "closed_at": "2026-09-09T14:40:33.361202+00:00",
+      "close_price": 0.009857061218070742
     },
     {
       "symbol": "ETHUSDT",
