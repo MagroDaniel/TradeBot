@@ -269,6 +269,19 @@ candidatos testados via `backtest/run.py`, todos em cima da produção com filtr
    em cima do gatilho existente): divergência RSI/preço, stop ATR trailing, breakout Donchian, alvo por
    movimento medido. Ficam documentados em `docs/estrategias_extraidas_livros.md` pra retomar depois.
 
+**Engine corrigido por outra IA (commit `b7272f6`, mesmo dia) e revalidação do filtro de range** —
+outra ferramenta (Codex) revisou `backtest/engine.py` e corrigiu dois vieses de look-ahead (janela do
+sinal incluía o próprio candle que tinha acabado de fechar; entrada simulada no fechamento do candle
+de sinal em vez de na abertura do próximo) e adicionou custo de execução real (`ExecutionCosts`: taxa
+taker + slippage, relatório agora separa R bruto de R líquido). Como o item 4 acima foi decidido contra
+o engine antigo, as 3 janelas (60/180/365 dias) foram rerodadas sob o engine corrigido pra confirmar: a
+amostra caiu bastante (56→7, 231→28, 371→55 — o engine novo é bem mais rigoroso sobre o que conta como
+sinal executável), mas R líquido continuou positivo nas 3 janelas (0.17/0.65/0.24) e sem inverter —
+e foi a **única** das 12 variantes com R líquido positivo nas 3 janelas depois de custo de execução real
+(inclusive o filtro de 1h sozinho, produção anterior a este, ficou negativo em R líquido). Decisão de
+produção **mantida** com confiança maior, não menor. Detalhes completos em
+`docs/estrategias_extraidas_livros.md`, seção "Revalidação sob o engine de backtest corrigido".
+
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
 `send_signal_alert` mostra entrada/stop/alvo/RSI/motivo + disclaimer fixo (nunca alavancagem, análise

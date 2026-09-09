@@ -178,6 +178,38 @@ descartado (mais fraco que 6x nas 3 janelas). Implementado em
 `analysis/signals.py::confirms_price_structure_range` — não fica mais em `backtest/filters.py`
 (mesmo tratamento que o filtro de 1h recebeu quando foi adotado).
 
+## Revalidação sob o engine de backtest corrigido (2026-09-09, commit `b7272f6` de outra IA)
+
+Outra ferramenta de IA (Codex) revisou `backtest/engine.py` depois da decisão acima e corrigiu
+dois vieses de look-ahead que inflavam os números de todas as variantes, inclusive desta: (1) a
+janela usada pra calcular o sinal incluía o próprio candle que tinha acabado de fechar — agora
+para em `idx-1`; (2) a entrada passou a ser simulada na **abertura do candle seguinte**, não mais
+no fechamento do candle de sinal, e só considera fechado um candle de timeframe maior (1h) que já
+tenha `close_time_ms` no passado (antes bastava ter aberto). Também foi adicionado um modelo de
+custo de execução (`ExecutionCosts`: taxa taker 0.04%/lado + slippage 0.02%/lado por padrão),
+com o relatório agora separando R **bruto** (só slippage) de R **líquido** (também desconta
+taxa+funding). Como a decisão de produção acima foi tomada contra o engine antigo (com viés e sem
+custo), rerodamos as mesmas 3 janelas (60/180/365 dias) pra confirmar se ainda se sustenta:
+
+| Janela | sinais (antes→depois) | win% | bruto(R) | líq(R) | PF líq | maxDD(R) |
+|---|---|---|---|---|---|---|
+| 60d | 56 → **7** | 57.1% | 0.61 | **0.17** | 1.24 | 3.78 |
+| 180d | 231 → **28** | 64.3% | 0.87 | **0.65** | 2.34 | 3.78 |
+| 365d | 371 → **55** | 49.1% | 0.43 | **0.24** | 1.39 | 11.31 |
+
+**Continua adotado em produção.** A amostra caiu bastante (o engine corrigido é bem mais
+rigoroso sobre o que conta como sinal executável — praticamente 8x menos sinais nas 3 janelas),
+mas o R líquido (já descontando taxa+slippage) se manteve **positivo nas 3 janelas**, sem
+inverter — mesmo critério usado pra adotar o filtro originalmente. Mais relevante ainda: rodando
+as 12 variantes de `VARIANTS` sob este engine, o range 6x foi a **única** que ficou com R líquido
+positivo nas 3 janelas — todas as outras (incluindo o filtro de 1h sozinho, que era a produção
+anterior a este filtro) ficaram negativas em R líquido depois de descontar custo de execução
+real. Ou seja, sob um padrão mais rigoroso e mais realista que o usado na decisão original, o
+filtro se saiu melhor relativamente às alternativas, não pior — reforça a decisão em vez de
+colocá-la em dúvida. Ressalva: `n=7` na janela de 60 dias é uma amostra pequena isoladamente;
+o que sustenta a confiança é a consistência com as janelas maiores (28 e 55 sinais), igual ao
+raciocínio já usado antes.
+
 ## Recomendação de próximos passos (nenhum implementado ainda)
 
 1. ~~Filtro de qualidade do candle de sinal~~ — implementado e testado, **descartado**.
