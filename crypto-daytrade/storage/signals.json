@@ -350,6 +350,19 @@
       "status": "stop_hit",
       "closed_at": "2026-09-09T06:00:29.287820+00:00",
       "close_price": 5.884563335825387
+    },
+    {
+      "symbol": "TRXUSDT",
+      "direction": "long",
+      "entry": 0.3391,
+      "stop_loss": 0.3385584559162618,
+      "target": 0.3401830881674764,
+      "rsi_value": 55.185823745609326,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 55 (não sobrecomprado)",
+      "opened_at": "2026-09-09T07:10:36.344289+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
     }
   ],
   "last_report_date": "2026-09-09"
