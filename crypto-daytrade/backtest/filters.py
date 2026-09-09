@@ -1,16 +1,19 @@
-"""Filtros de regime pra testar em cima do gatilho EMA9/EMA21+RSI já existente
-(`analysis/signals.py`) — não substituem o gatilho, só decidem se vale a pena confiar nele
-agora. Baseado em pesquisa sobre por que cruzamento de EMA cru perde na maioria das condições:
-"the filters are the strategy; the crossover is just the trigger" (ver conversa que motivou
-isso, 2026-09-09) — mercado de lado (ADX baixo) e contra a tendência maior são os dois motivos
-mais citados pra whipsaw.
+"""Filtro de regime extra (ADX) pra testar em cima do gatilho EMA9/EMA21+RSI já existente
+(`analysis/signals.py`) — não substitui o gatilho, só decide se vale a pena confiar nele agora.
+Baseado em pesquisa sobre por que cruzamento de EMA cru perde na maioria das condições: "the
+filters are the strategy; the crossover is just the trigger" (2026-09-09).
 
-Cada filtro recebe só os candles/indicadores relevantes, não o estado do backtest inteiro —
-função pura, testável isolada, mesmo espírito de `analysis/indicators.py`.
+O filtro de tendência de timeframe maior (1h) que a pesquisa também sugeria mora em
+`analysis/signals.py::confirms_higher_timeframe_trend` — não aqui — porque os dois backtests
+(60 e 180 dias) confirmaram consistentemente que ele melhora o resultado e **foi adotado em
+produção** (`generate_signal` já aceita `higher_tf_candles`); `backtest/engine.py` chama a
+mesma função de lá em vez de duplicar. ADX, ao contrário, **piorou o resultado nos dois
+testes** — fica só aqui, como filtro opcional pra explorar no backtest, nunca chegou a entrar
+em produção (ver CLAUDE.md, seção "Backtest walk-forward", pros números).
 """
 from __future__ import annotations
 
-from analysis.indicators import adx, ema
+from analysis.indicators import adx
 from data.binance_client import Candle
 
 DEFAULT_MIN_ADX = 25.0
@@ -24,15 +27,3 @@ def passes_adx_filter(window: list[Candle], min_adx: float = DEFAULT_MIN_ADX) ->
     closes = [c.close for c in window]
     values = adx(highs, lows, closes, period=14)
     return bool(values) and values[-1] >= min_adx
-
-
-def passes_higher_timeframe_trend_filter(higher_tf_window: list[Candle], direction: str) -> bool:
-    """True só se a tendência de timeframe maior (ex: 1h) concordar com a direção do sinal —
-    long só se EMA9 > EMA21 no 1h, short só se EMA9 < EMA21. Evita brigar contra o "quadro
-    geral" só porque o timeframe de entrada (15m) deu um cruzamento pontual."""
-    closes = [c.close for c in higher_tf_window]
-    fast = ema(closes, 9)
-    slow = ema(closes, 21)
-    if not fast or not slow:
-        return False
-    return fast[-1] > slow[-1] if direction == "long" else fast[-1] < slow[-1]

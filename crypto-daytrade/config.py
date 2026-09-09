@@ -28,6 +28,11 @@ TELEGRAM_CHAT_ID = _get_env("TELEGRAM_CHAT_ID", required=True)
 # --- Escaneamento ---
 TOP_SYMBOLS_COUNT = int(_get_env("TOP_SYMBOLS_COUNT", default="25"))  # top N por volume 24h
 TIMEFRAME = _get_env("TIMEFRAME", default="15m")  # intervalo dos candles (day trade)
+# Timeframe maior usado só pra confirmar a direção do sinal de TIMEFRAME (ver
+# analysis/signals.py::confirms_higher_timeframe_trend) — cruzamento de EMA sozinho no 15m tem
+# expectância negativa (backtest de 60 e 180 dias confirmou nas duas janelas); exigir que o 1h
+# concorde reverteu isso pra expectância positiva. Ver CLAUDE.md, "Backtest walk-forward".
+HIGHER_TIMEFRAME = _get_env("HIGHER_TIMEFRAME", default="1h")
 # Sinal aberto que não bate alvo nem stop dentro desse prazo é marcado "expirado" — evita
 # ficar rastreando um sinal indefinidamente.
 SIGNAL_EXPIRY_HOURS = float(_get_env("SIGNAL_EXPIRY_HOURS", default="24"))

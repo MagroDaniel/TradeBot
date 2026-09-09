@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from analysis.outcomes import check_outcome
 from analysis.signals import generate_signal
-from backtest.filters import passes_adx_filter, passes_higher_timeframe_trend_filter
+from backtest.filters import passes_adx_filter
 from data.binance_client import Candle
 from storage.signals_store import SignalRecord
 
@@ -125,19 +125,19 @@ def run_backtest(
                 continue  # ainda não tem histórico suficiente pros indicadores
 
             window = candles[idx + 1 - WINDOW_SIZE : idx + 1]
-            signal = generate_signal(symbol, window)
+
+            htf_window = None
+            if variant.use_htf_trend_filter:
+                htf_window = _higher_tf_window(symbol, now_ms)
+                if htf_window is None:
+                    continue  # sem histórico de 1h suficiente ainda pra confirmar
+
+            signal = generate_signal(symbol, window, higher_tf_candles=htf_window)
             if signal is None:
                 continue
 
             if variant.min_adx is not None and not passes_adx_filter(window, variant.min_adx):
                 continue
-
-            if variant.use_htf_trend_filter:
-                htf_window = _higher_tf_window(symbol, now_ms)
-                if htf_window is None or not passes_higher_timeframe_trend_filter(
-                    htf_window, signal.direction
-                ):
-                    continue
 
             if variant.max_concurrent_same_direction is not None:
                 if _count_open_same_direction(signal.direction) >= variant.max_concurrent_same_direction:

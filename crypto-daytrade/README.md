@@ -39,15 +39,23 @@ esses são exatamente os sinais de canal predatório que motivaram esse aviso.
 
 ## Estratégia (transparente, sem "caixa preta")
 
-- **EMA9 cruza acima da EMA21** + RSI entre 30-65 → sinal de **compra (long)**.
-- **EMA9 cruza abaixo da EMA21** + RSI entre 35-70 → sinal de **venda (short)**.
+- **EMA9 cruza acima da EMA21** (no candle de 15m) + RSI entre 30-65 → candidato a **compra
+  (long)**.
+- **EMA9 cruza abaixo da EMA21** + RSI entre 35-70 → candidato a **venda (short)**.
+- **Confirmação de tendência maior**: o candidato só vira sinal de verdade se o mesmo par
+  EMA9/EMA21, calculado sobre candles de **1h**, concordar com a direção (1h em alta pra long,
+  1h em baixa pra short). Adicionado em 2026-09-09 depois de dois backtests (60 e 180 dias
+  reais) confirmarem que o cruzamento de 15m sozinho tem expectância **negativa**, e que exigir
+  essa confirmação reverte pra expectância positiva de forma consistente nas duas janelas.
 - **Stop loss**: 1,5× ATR14 de distância da entrada (proporcional à volatilidade recente do
   próprio par, não um valor fixo igual pra qualquer moeda).
 - **Alvo**: 2× a distância do stop (relação risco:retorno de 1:2).
 
 É uma estratégia clássica de "tendência + confirmação de momentum" — bem documentada,
 replicável, mas **sem garantia de lucro**. Mercado lateral (sem tendência definida) tende a
-gerar sinais falsos com qualquer estratégia baseada em cruzamento de médias, esta incluída.
+gerar sinais falsos com qualquer estratégia baseada em cruzamento de médias; a confirmação de
+1h reduz isso, não elimina. Ver seção "Backtest" abaixo pra validar qualquer mudança futura
+contra histórico real antes de mexer em produção.
 
 ## Setup
 

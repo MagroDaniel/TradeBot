@@ -31,9 +31,13 @@ logger = logging.getLogger(__name__)
 HIGHER_TIMEFRAME = "1h"
 
 VARIANTS = [
-    Variant(name="baseline (produção atual)"),
-    Variant(name="+ ADX >= 25", min_adx=25.0),
-    Variant(name="+ tendência 1h", use_htf_trend_filter=True),
+    # Desde 2026-09-09, "produção atual" É a variante com filtro de 1h — confirmada em dois
+    # backtests (60 e 180 dias) como a única com expectância positiva e consistente entre
+    # janelas. As outras ficam aqui só pra reavaliar de vez em quando, não pra reabrir sem
+    # motivo (ver CLAUDE.md, "Decisões já tomadas" e "Backtest walk-forward").
+    Variant(name="sem filtro (pré-2026-09-09)"),
+    Variant(name="+ ADX >= 25 (descartado, piora)", min_adx=25.0),
+    Variant(name="+ tendência 1h (produção atual)", use_htf_trend_filter=True),
     Variant(name="+ ADX + tendência 1h", min_adx=25.0, use_htf_trend_filter=True),
     Variant(
         name="+ ADX + 1h + máx 3 correlacionados",

@@ -1,4 +1,4 @@
-from backtest.filters import passes_adx_filter, passes_higher_timeframe_trend_filter
+from backtest.filters import passes_adx_filter
 from data.binance_client import Candle
 
 
@@ -21,19 +21,3 @@ def test_adx_filter_blocks_a_sideways_market():
 
 def test_adx_filter_blocks_when_not_enough_history():
     assert passes_adx_filter(_candles_from_closes([100.0, 101.0]), min_adx=25.0) is False
-
-
-def test_higher_timeframe_filter_confirms_long_in_an_uptrend():
-    closes = [100.0 + i * 0.5 for i in range(30)]
-    assert passes_higher_timeframe_trend_filter(_candles_from_closes(closes), "long") is True
-    assert passes_higher_timeframe_trend_filter(_candles_from_closes(closes), "short") is False
-
-
-def test_higher_timeframe_filter_confirms_short_in_a_downtrend():
-    closes = [100.0 - i * 0.5 for i in range(30)]
-    assert passes_higher_timeframe_trend_filter(_candles_from_closes(closes), "short") is True
-    assert passes_higher_timeframe_trend_filter(_candles_from_closes(closes), "long") is False
-
-
-def test_higher_timeframe_filter_false_when_not_enough_history():
-    assert passes_higher_timeframe_trend_filter(_candles_from_closes([100.0]), "long") is False

@@ -35,9 +35,12 @@ já tomadas" abaixo). Se encontrar código ou histórico de commit mencionando "
   uma decisão de negócio do usuário, fora do escopo deste repositório — mas o README/CLAUDE.md deixam o
   aviso registrado porque veio explicitamente da intenção declarada de "vender pra outras pessoas".
 - **Só análise/alerta, sem execução automática** — mesma filosofia do bot de apostas.
-- **Estratégia clássica e documentada (EMA9/EMA21 + RSI14 + ATR14)**, não uma "caixa preta" — cada sinal
-  carrega `reason` explicando exatamente por que saiu (ver "Modelo de sinal" abaixo). Escolhida por ser um
-  método padrão, replicável e sem alegação de edge que não se pode sustentar.
+- **Estratégia clássica e documentada (EMA9/EMA21 + RSI14 + ATR14, + confirmação de EMA9/EMA21 do 1h desde
+  2026-09-09)**, não uma "caixa preta" — cada sinal carrega `reason` explicando exatamente por que saiu
+  (ver "Modelo de sinal" abaixo). Escolhida por ser um método padrão, replicável e sem alegação de edge que
+  não se pode sustentar. Qualquer mudança futura na composição da estratégia precisa passar pelo backtest
+  (`backtest/run.py`) antes de ir pra produção — decisão tomada com base em expectância negativa medida em
+  amostra pequena ao vivo, não em intuição (ver "Backtest walk-forward").
 - **Top pares por volume (~25), timeframe 15m** — decisão explícita do usuário. Stablecoins (USDC, USD1,
   FDUSD etc.) são filtradas na origem (`_STABLECOIN_BASES` em `binance_client.py`) porque têm volume alto
   mas preço travado em ~1.00, nunca geram cruzamento real — desperdiçariam uma chamada de klines por
@@ -104,8 +107,16 @@ séries de tamanhos diferentes sem alinhar manualmente.
 `generate_signal()` retorna `None` na maioria das chamadas — sinal é evento raro por design, não um
 palpite forçado a cada execução. Dispara quando:
 - **Long**: EMA9 cruza de baixo pra cima da EMA21 **e** RSI14 no candle do cruzamento está entre 30-65
-  (`LONG_RSI_RANGE`) — filtro que evita comprar já sobrecomprado mesmo com o cruzamento "a favor".
-- **Short**: cruzamento inverso, RSI entre 35-70 (`SHORT_RSI_RANGE`).
+  (`LONG_RSI_RANGE`) — filtro que evita comprar já sobrecomprado mesmo com o cruzamento "a favor") **e**
+  `confirms_higher_timeframe_trend(higher_tf_candles, "long")` (EMA9/EMA21 do 1h também em alta).
+- **Short**: cruzamento inverso, RSI entre 35-70 (`SHORT_RSI_RANGE`), 1h também em baixa.
+
+O parâmetro `higher_tf_candles` é opcional (`None` = pula o filtro) só pra permitir comparar variantes no
+backtest — `main.py` **sempre** passa (busca 50 candles de `config.HIGHER_TIMEFRAME` a mais por símbolo em
+`scan_for_new_signals`, uma chamada extra de API). Adicionado em 2026-09-09 depois de dois backtests (60 e
+180 dias) confirmarem que sem esse filtro a expectância é negativa — ver "Backtest walk-forward" abaixo.
+**Não remova esse filtro sem rodar `python -m backtest.run` de novo e ver expectância positiva** — foi
+adicionado com base em dado, não em intuição, e reverter sem revalidar reabriria o mesmo problema.
 
 Stop = `entry ∓ ATR_STOP_MULTIPLIER(1.5) × ATR14`; alvo = `entry ± RISK_REWARD_RATIO(2.0) × risco`. Os
 testes (`tests/test_signals.py`) usam fixtures de preço sintético **validadas empiricamente** (uma sequência
@@ -194,15 +205,28 @@ isso. Não invalida a comparação entre variantes (todas rodam contra o mesmo c
 número absoluto de expectância pode não se repetir exatamente se o conjunto de pares de maior volume mudar.
 
 **Resultado do primeiro backtest real (60 dias, 25 pares, 2026-09-09)** — confirma com amostra grande
-(4200+ trades) o que o usuário via ao vivo: baseline (estratégia de produção, sem filtro) deu
-`expectancy_r ≈ -0.05`, profit factor `0.92` — **expectativa negativa confirmada**, não foi azar de amostra
-pequena. Variante `+ tendência 1h` (só o filtro de timeframe maior, sem ADX) foi a única com expectativa
-positiva: `expectancy_r ≈ +0.06`, profit factor `1.09`, drawdown máximo bem menor (101R vs 267R do
-baseline) — reduz o volume de sinais em ~45%, mas melhora a qualidade do que sobra. Contra-intuitivo: ADX
-sozinho **piorou** o resultado (`-0.10`) em vez de melhorar, e combinar ADX + 1h também ficou negativo — a
-pesquisa genérica sobre ADX como filtro de tendência não se confirmou neste mercado/período específico;
-quem decide o que vale é o backtest, não a heurística de "livro-texto". Decisão de que variante (se
-alguma) vai pra produção ainda não foi tomada — pendente de decisão do usuário.
+(4200+ trades) o que o usuário via ao vivo: baseline (estratégia sem filtro, a que estava em produção até
+então) deu `expectancy_r ≈ -0.05`, profit factor `0.92` — **expectativa negativa confirmada**, não foi azar
+de amostra pequena. Variante `+ tendência 1h` (só o filtro de timeframe maior, sem ADX) foi a única com
+expectativa positiva: `expectancy_r ≈ +0.06`, profit factor `1.09`, drawdown máximo bem menor (101R vs 267R
+do baseline). Contra-intuitivo: ADX sozinho **piorou** o resultado (`-0.10`), e combinar ADX + 1h também
+ficou negativo (`-0.05`) — a pesquisa genérica sobre ADX como filtro de tendência não se confirmou neste
+mercado/período; quem decide o que vale é o backtest, não a heurística de "livro-texto".
+
+**Segundo backtest, 180 dias, pra validar antes de mudar produção** — usuário pediu mais confiança antes de
+aplicar qualquer coisa. Amostra quase 3x maior (12.368 trades resolvidos no baseline):
+`expectancy_r ≈ -0.02` (ainda negativo, magnitude menor). `+ tendência 1h` continuou **positivo**:
+`+0.03`, PF `1.05`, amostra de 6833 trades — sinal consistente com o teste de 60 dias (era `+0.06`), então
+confiável (mesma direção em duas janelas de tamanho diferente, com milhares de trades nas duas). Os combos
+com ADX (`+ADX+1h`: `-0.05` aos 60 dias vs `+0.05` aos 180 dias) **inverteram de sinal entre as janelas** —
+bandeira de overfitting/amostra pequena (só 250-700 trades), não edge real; não foram adotados por isso,
+mesmo o número de 180 dias parecendo melhor isoladamente.
+
+**Decisão tomada (2026-09-09)**: `+ tendência 1h` foi **aplicado em produção** —
+`analysis/signals.py::generate_signal()` agora exige `confirms_higher_timeframe_trend()` antes de confirmar
+qualquer sinal, `main.py` busca os candles de 1h extras. ADX não foi adotado (piorou nos dois testes).
+`backtest/run.py::VARIANTS` foi atualizado pra refletir isso — a variante "produção atual" no relatório do
+CLI é a com filtro de 1h, não mais a sem filtro.
 
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
@@ -292,7 +316,8 @@ contra um sinal que realmente bateu stop/alvo/expirou nesse momento — isso já
 
 GitHub Actions rodando de verdade a cada 10 min desde 2026-09-09 (cron externo via cron-job.org +
 `workflow_dispatch`, proxy pro bloqueio 451 da Binance, `chat_id` do Telegram corrigido — ver "Automação").
-75 testes automatizados passando, sem rede. Backtest walk-forward (`backtest/`) construído e rodado uma
-vez contra 60 dias reais — ver "Backtest walk-forward" acima pro resultado. Nenhuma mudança em
-`analysis/signals.py` foi aplicada ainda a partir desse resultado; produção continua com a estratégia
-original (sem filtro de ADX/tendência 1h/correlação) até decisão do usuário.
+77 testes automatizados passando, sem rede. Backtest walk-forward (`backtest/`) construído e rodado duas
+vezes contra histórico real (60 e 180 dias) — ver "Backtest walk-forward" acima. Com os dois resultados
+convergindo, o filtro de tendência de 1h foi aplicado em produção (`analysis/signals.py` +
+`main.py`); ADX foi testado e descartado. Ainda sem sinal real gerado com o filtro novo em produção (só
+rodou no backtest até agora) — próxima execução do Actions já vai usar a lógica nova.

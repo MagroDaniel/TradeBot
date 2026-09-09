@@ -1,6 +1,6 @@
 import pytest
 
-from analysis.signals import RISK_REWARD_RATIO, generate_signal
+from analysis.signals import RISK_REWARD_RATIO, confirms_higher_timeframe_trend, generate_signal
 from data.binance_client import Candle
 
 
@@ -83,3 +83,39 @@ def test_no_signal_with_insufficient_history():
     candles = _candles_from_closes([100.0, 101.0, 99.0])
 
     assert generate_signal("TESTUSDT", candles) is None
+
+
+def test_confirms_higher_timeframe_trend_for_long_in_an_uptrend():
+    htf_candles = _candles_from_closes([100.0 + i * 0.5 for i in range(30)])
+
+    assert confirms_higher_timeframe_trend(htf_candles, "long") is True
+    assert confirms_higher_timeframe_trend(htf_candles, "short") is False
+
+
+def test_confirms_higher_timeframe_trend_for_short_in_a_downtrend():
+    htf_candles = _candles_from_closes([100.0 - i * 0.5 for i in range(30)])
+
+    assert confirms_higher_timeframe_trend(htf_candles, "short") is True
+    assert confirms_higher_timeframe_trend(htf_candles, "long") is False
+
+
+def test_confirms_higher_timeframe_trend_false_when_not_enough_history():
+    assert confirms_higher_timeframe_trend(_candles_from_closes([100.0]), "long") is False
+
+
+def test_higher_timeframe_filter_blocks_long_signal_against_the_bigger_trend():
+    candles = _candles_from_closes(_decline_then_rise())
+    downtrend_htf = _candles_from_closes([200.0 - i * 0.5 for i in range(30)])
+
+    assert generate_signal("TESTUSDT", candles) is not None  # sem filtro, dispara normalmente
+    assert generate_signal("TESTUSDT", candles, higher_tf_candles=downtrend_htf) is None
+
+
+def test_higher_timeframe_filter_allows_long_signal_with_the_bigger_trend():
+    candles = _candles_from_closes(_decline_then_rise())
+    uptrend_htf = _candles_from_closes([50.0 + i * 0.5 for i in range(30)])
+
+    signal = generate_signal("TESTUSDT", candles, higher_tf_candles=uptrend_htf)
+
+    assert signal is not None
+    assert signal.direction == "long"

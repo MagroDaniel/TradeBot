@@ -7,6 +7,16 @@ qualquer outro palpite de mercado, só que baseado num método transparente e re
 pra conferir exatamente por que cada sinal saiu, ver `Signal.reason`). NUNCA sugere
 alavancagem — decisão deliberada do usuário (ver CLAUDE.md), quem for operar decide o próprio
 gerenciamento de risco fora do bot.
+
+**Filtro de tendência de timeframe maior (adicionado 2026-09-09)**: cruzamento de EMA9/EMA21
+sozinho no 15m tem expectância negativa (`backtest/` rodado contra 60 e 180 dias reais de
+histórico confirmou isso nas duas janelas — ver CLAUDE.md, seção "Backtest walk-forward"). Só
+a confirmação de tendência do 1h (mesmo par EMA9/EMA21, timeframe maior) reverteu isso pra
+expectância positiva de forma consistente nas duas janelas testadas — por isso
+`generate_signal` agora exige `higher_tf_candles` alinhado com a direção do sinal antes de
+confirmar. ADX foi testado e descartado (piorou o resultado nos dois backtests, ao contrário
+do que a literatura genérica sugeria) — fica só como filtro opcional dentro de `backtest/`,
+nunca chegou a entrar aqui.
 """
 from __future__ import annotations
 
@@ -39,9 +49,27 @@ class Signal:
     reason: str
 
 
-def generate_signal(symbol: str, candles: list[Candle]) -> Signal | None:
+def confirms_higher_timeframe_trend(higher_tf_candles: list[Candle], direction: str) -> bool:
+    """True só se a tendência do timeframe maior (mesma EMA9/EMA21, mas calculada sobre
+    candles de período maior — normalmente 1h enquanto `candles` é 15m) concordar com a
+    direção do sinal. False (bloqueia) se não tiver histórico suficiente — não confirma na
+    dúvida."""
+    closes = [c.close for c in higher_tf_candles]
+    fast = ema(closes, EMA_FAST_PERIOD)
+    slow = ema(closes, EMA_SLOW_PERIOD)
+    if not fast or not slow:
+        return False
+    return fast[-1] > slow[-1] if direction == "long" else fast[-1] < slow[-1]
+
+
+def generate_signal(
+    symbol: str, candles: list[Candle], higher_tf_candles: list[Candle] | None = None
+) -> Signal | None:
     """None quando não há sinal (a maioria dos candles — sinal é evento raro por design,
-    não um palpite a cada execução) ou quando o histórico é curto demais pros indicadores."""
+    não um palpite a cada execução), quando o histórico é curto demais pros indicadores, ou
+    quando o cruzamento aconteceu mas a tendência de `higher_tf_candles` não confirma (ver
+    `confirms_higher_timeframe_trend`) — passe `None` só em contexto que deliberadamente não
+    quer esse filtro (ex: comparar variantes no backtest)."""
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
     lows = [c.low for c in candles]
@@ -67,6 +95,10 @@ def generate_signal(symbol: str, candles: list[Candle]) -> Signal | None:
     crossed_down = fast_prev >= slow_prev and fast_now < slow_now
 
     if crossed_up and LONG_RSI_RANGE[0] <= rsi_now <= LONG_RSI_RANGE[1]:
+        if higher_tf_candles is not None and not confirms_higher_timeframe_trend(
+            higher_tf_candles, "long"
+        ):
+            return None
         stop_loss = entry - ATR_STOP_MULTIPLIER * atr_now
         risk = entry - stop_loss
         target = entry + RISK_REWARD_RATIO * risk
@@ -77,6 +109,10 @@ def generate_signal(symbol: str, candles: list[Candle]) -> Signal | None:
         return Signal(symbol, "long", entry, stop_loss, target, rsi_now, reason)
 
     if crossed_down and SHORT_RSI_RANGE[0] <= rsi_now <= SHORT_RSI_RANGE[1]:
+        if higher_tf_candles is not None and not confirms_higher_timeframe_trend(
+            higher_tf_candles, "short"
+        ):
+            return None
         stop_loss = entry + ATR_STOP_MULTIPLIER * atr_now
         risk = stop_loss - entry
         target = entry - RISK_REWARD_RATIO * risk

@@ -111,11 +111,14 @@ def scan_for_new_signals(client: BinanceClient, store: SignalsStore, notifier: T
 
         try:
             candles = client.get_klines(symbol, interval=config.TIMEFRAME, limit=100)
+            # 50 candles de 1h só pra confirmar tendência (EMA9/EMA21 precisa de pelo menos
+            # 21) — ver analysis/signals.py::confirms_higher_timeframe_trend
+            higher_tf_candles = client.get_klines(symbol, interval=config.HIGHER_TIMEFRAME, limit=50)
         except Exception:
             logger.exception("Falha ao buscar candles pra %s", symbol)
             continue
 
-        signal = generate_signal(symbol, candles)
+        signal = generate_signal(symbol, candles, higher_tf_candles=higher_tf_candles)
         if signal is None:
             continue
 
