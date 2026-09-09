@@ -180,19 +180,74 @@ de 1 par. O resultado mais perto disso é `+ BB 2.5 desvios` em GBP/USD, oscilan
 zero — não dá pra descartar que seja edge real fraco, mas também não dá pra confirmar que não é
 ruído. Bot continua fora de produção.
 
+## Alavancagem (2026-09-09, pergunta do usuário) — não ajuda estratégia sem edge
+
+Forex de varejo quase sempre usa margem/alavancagem (diferente de cripto spot). Mas
+alavancagem **não conserta expectância negativa** — só multiplica o resultado que já existe,
+pra cima ou pra baixo. Os números de R aqui já são normalizados por risco (unidade de conta,
+não valor absoluto), então usar alavancagem numa estratégia com R líquido negativo só acelera
+a perda, não resolve o problema de fundo. Mesma regra do resto do projeto: o bot nunca sugere
+quanto de alavancagem usar — essa conversa só faz sentido depois de achar expectância positiva
+de verdade.
+
+## Terceira estratégia — rompimento do range asiático / London Breakout (2026-09-09, mesmo dia)
+
+Pesquisa adicional: evidência real (ainda que "mild statistical edge", resultado misto na
+literatura) de que o range formado na sessão asiática (baixa liquidez) tende a ser rompido de
+forma direcional quando Londres abre. GBP/USD e EUR/USD citados como os pares mais indicados —
+testado com os dois juntos numa mesma rodada (mais amostra agregada).
+
+`analysis/breakout_signals.py` + `backtest/breakout_engine.py`: sinal só na janela 07h-11h UTC,
+rompimento da máxima/mínima da sessão asiática (00h-07h UTC) do mesmo dia, stop do lado oposto
+do range, um sinal por dia por par.
+
+| Janela | expiração | sinais | win% | R líq | % expirado |
+|---|---|---|---|---|---|
+| 60d | 24h (padrão) | 54 | 30.6% | -0.14 | 33% |
+| 180d | 24h (padrão) | 148 | 28.7% | -0.06 | 41% |
+| 365d | 24h (padrão) | 299 | 22.5% | -0.12 | 40% |
+| 180d | 96h (teste) | 119 | 26.9% | **-0.21** | 12% |
+
+**Achado técnico**: ~40% dos sinais expiravam em 24h sem bater alvo nem stop — testei com
+expiração maior (96h) pra ver se isso mascarava o resultado real. Não mascarava: com mais
+tempo pra resolver, o resultado **piorou** (-0.06 → -0.21), e o % de expirados caiu de 41% pra
+12% — ou seja, dar mais tempo pro preço "decidir" resulta em mais stop batido, não mais alvo
+batido. Diferente do mean reversion (que oscilou de sinal entre pares/janelas), o rompimento é
+**consistentemente negativo** nas 3 janelas, sem inverter — não é ruído, é expectância
+negativa real, só que estável.
+
+## Balanço final da sessão (2026-09-09) — 4 abordagens testadas, nenhuma foi
+
+| Abordagem | Sinal (positivo/negativo/oscila) | Melhor R líq visto |
+|---|---|---|
+| EMA 15min (herdada do cripto) | negativo, consistente | -0.68 a -0.72 |
+| EMA 1h + sessão + tendência 4h | negativo, consistente | -0.07 a -0.18 |
+| Mean reversion (Bollinger+RSI), EUR/USD | negativo, piora com amostra | -0.02 a -0.20 |
+| Mean reversion, GBP/USD | **oscila de sinal** (ruído) | -0.24 a +0.09 |
+| Rompimento range asiático (Londres) | negativo, consistente | -0.06 a -0.21 |
+
+Nenhuma abordagem testada — recalibração de parâmetro, mudança de timeframe, filtro de sessão,
+mean reversion, ou breakout — cruzou pra expectância positiva de forma confiável. Bot continua
+fora de produção.
+
 ## Próximos passos (nenhum feito ainda — decisão em aberto)
 
-1. Testar um terceiro par (USD/JPY) pra desempatar — se ele também oscilar de sinal como
-   GBP/USD, reforça a leitura de ruído; se convergir com EUR/USD ou GBP/USD, ajuda a decidir.
-2. Juntar os 3 pares numa MESMA rodada de backtest (universo, não símbolo único) — aumenta o
-   tamanho de amostra agregada, mais poder estatístico que testar par por par isoladamente.
-3. Refinar o alvo de mean reversion (hoje é a banda central CONGELADA no momento do sinal).
-4. Ou aceitar que, com o tempo e dado já investidos, nenhuma abordagem testada tem edge
-   comprovado o bastante pra ir pra produção — encerrar por ora.
+1. Aceitar, com o tempo e dado já investidos (4 abordagens, 2 pares, 3 janelas cada, ~40
+   variantes testadas no total), que day trade técnico simples (indicador sobre candle,
+   sem dado fundamental/notícia/fluxo de ordem) não mostrou edge comprovado nesse mercado com
+   os recursos disponíveis — encerrar esse caminho por ora é uma conclusão legítima, não uma
+   desistência prematura.
+2. Buscar uma abordagem qualitativamente diferente das 4 testadas — ex: trading orientado a
+   notícia/calendário econômico (não testado, exigiria fonte de dados de calendário econômico
+   que não temos hoje), ou aceitar que retorno consistente em forex de varejo dia a dia é raro
+   mesmo (74-89% dos traders de varejo perdem dinheiro, dado ESMA 2025) e não é o tipo de coisa
+   que se resolve só com mais tentativas de parâmetro.
+3. Testar um terceiro par (USD/JPY) em todas as 3 estratégias, se ainda fizer sentido investir
+   mais tempo nisso.
 
-Infraestrutura (indicadores — incluindo Bollinger Bands —, dois motores de backtest sem viés
-de look-ahead, cliente da Twelve Data, storage, Telegram, CLIs configuráveis com --symbols)
-está pronta e testada (124 testes) pra qualquer um dos quatro caminhos.
+Infraestrutura (indicadores — EMA/RSI/ATR/ADX/Bollinger —, três motores de backtest sem viés
+de look-ahead, cliente da Twelve Data, storage, Telegram, CLIs configuráveis) está pronta e
+testada (139 testes) pra continuar por qualquer um desses caminhos quando fizer sentido.
 
 ## Decisões já tomadas
 
