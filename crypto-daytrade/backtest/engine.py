@@ -21,7 +21,11 @@ from analysis.signals import (
     SHORT_RSI_RANGE,
     generate_signal,
 )
-from backtest.filters import passes_adx_filter, passes_signal_candle_quality_filter
+from backtest.filters import (
+    passes_adx_filter,
+    passes_price_structure_range_filter,
+    passes_signal_candle_quality_filter,
+)
 from data.binance_client import Candle
 from storage.signals_store import SignalRecord
 
@@ -42,6 +46,7 @@ class Variant:
     atr_stop_multiplier: float | None = None  # None = usa o default de produção (ATR_STOP_MULTIPLIER)
     long_rsi_range: tuple[float, float] | None = None  # None = usa LONG_RSI_RANGE de produção
     short_rsi_range: tuple[float, float] | None = None  # None = usa SHORT_RSI_RANGE de produção
+    min_range_expansion: float | None = None  # None = sem filtro de range por estrutura de preço
 
 
 @dataclass
@@ -157,6 +162,11 @@ def run_backtest(
 
             if variant.min_signal_candle_close_position is not None and not passes_signal_candle_quality_filter(
                 window, signal.direction, variant.min_signal_candle_close_position
+            ):
+                continue
+
+            if variant.min_range_expansion is not None and not passes_price_structure_range_filter(
+                window, min_range_expansion=variant.min_range_expansion
             ):
                 continue
 

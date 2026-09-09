@@ -78,6 +78,12 @@ VARIANTS = [
         long_rsi_range=(40.0, 90.0),
         short_rsi_range=(10.0, 60.0),
     ),
+    # Item 4 da lista priorizada — segunda tentativa no mesmo objetivo do ADX (detectar range
+    # antes de confiar no cruzamento), mas por estrutura de preço em vez de fórmula de
+    # suavização. Dois limiares pra ver a sensibilidade: 4x (mais permissivo) e 6x (mais
+    # rígido) — ver backtest/filters.py::passes_price_structure_range_filter.
+    Variant(name="+ 1h + range por estrutura (4x)", use_htf_trend_filter=True, min_range_expansion=4.0),
+    Variant(name="+ 1h + range por estrutura (6x)", use_htf_trend_filter=True, min_range_expansion=6.0),
 ]
 
 

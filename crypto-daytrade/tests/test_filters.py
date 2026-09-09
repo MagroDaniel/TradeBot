@@ -1,4 +1,8 @@
-from backtest.filters import passes_adx_filter, passes_signal_candle_quality_filter
+from backtest.filters import (
+    passes_adx_filter,
+    passes_price_structure_range_filter,
+    passes_signal_candle_quality_filter,
+)
 from data.binance_client import Candle
 
 
@@ -68,3 +72,25 @@ def test_signal_candle_quality_blocks_zero_range_candle():
 def test_signal_candle_quality_blocks_when_not_enough_history():
     short_window = _candles_from_closes([100.0] * 5)
     assert passes_signal_candle_quality_filter(short_window, "long", min_close_position=0.5) is False
+
+
+def test_price_structure_range_filter_passes_for_a_steady_uptrend():
+    closes = [100.0 + i for i in range(20)]  # amplitude total cresce muito mais que a de 1 candle
+    assert passes_price_structure_range_filter(_candles_from_closes(closes), lookback=20) is True
+
+
+def test_price_structure_range_filter_blocks_a_tight_overlapping_range():
+    closes = [100.0 + (2.0 if i % 2 == 0 else -2.0) for i in range(20)]  # candles se sobrepõem
+    assert passes_price_structure_range_filter(_candles_from_closes(closes), lookback=20) is False
+
+
+def test_price_structure_range_filter_blocks_when_not_enough_history():
+    closes = [100.0 + i for i in range(10)]
+    assert passes_price_structure_range_filter(_candles_from_closes(closes), lookback=20) is False
+
+
+def test_price_structure_range_filter_respects_custom_threshold():
+    closes = [100.0 + i for i in range(20)]
+    window = _candles_from_closes(closes)
+    # limiar absurdamente alto — nem a tendência forte deveria passar
+    assert passes_price_structure_range_filter(window, lookback=20, min_range_expansion=1000.0) is False
