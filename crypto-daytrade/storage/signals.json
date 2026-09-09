@@ -412,9 +412,9 @@
       "rsi_value": 43.23534219197475,
       "reason": "EMA9 cruzou abaixo da EMA21, RSI em 43 (não sobrevendido)",
       "opened_at": "2026-09-09T09:30:52.012947+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "target_hit",
+      "closed_at": "2026-09-09T10:00:30.294958+00:00",
+      "close_price": 7.917215931317916
     },
     {
       "symbol": "ADAUSDT",
