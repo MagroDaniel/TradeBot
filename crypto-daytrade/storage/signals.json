@@ -425,9 +425,9 @@
       "rsi_value": 37.031045739582595,
       "reason": "EMA9 cruzou abaixo da EMA21, RSI em 37 (não sobrevendido)",
       "opened_at": "2026-09-09T09:50:47.882590+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T11:50:25.148388+00:00",
+      "close_price": 0.21989877624480597
     },
     {
       "symbol": "ARBUSDT",
