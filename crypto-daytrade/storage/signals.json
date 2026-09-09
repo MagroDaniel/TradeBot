@@ -295,9 +295,9 @@
       "rsi_value": 59.805113793558405,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 60 (não sobrecomprado)",
       "opened_at": "2026-09-09T04:20:34.925164+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "target_hit",
+      "closed_at": "2026-09-09T08:10:19.546686+00:00",
+      "close_price": 1.4428260658799446
     },
     {
       "symbol": "DOGEUSDT",
