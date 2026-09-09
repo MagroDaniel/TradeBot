@@ -28,6 +28,10 @@ on:
         description: "Pares separados por vírgula (ex: GBP/USD). Vazio = config.BACKTEST_SYMBOLS"
         required: false
         default: ""
+      expiry_hours:
+        description: "SIGNAL_EXPIRY_HOURS — vazio usa o default de config.py (24)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -53,6 +57,9 @@ jobs:
           TELEGRAM_CHAT_ID: dummy-for-backtest-only
           TWELVEDATA_API_KEY: ${{ secrets.FOREX_TWELVEDATA_API_KEY }}
         run: |
+          if [ -n "${{ github.event.inputs.expiry_hours }}" ]; then
+            export SIGNAL_EXPIRY_HOURS="${{ github.event.inputs.expiry_hours }}"
+          fi
           SYMBOLS_ARG=""
           if [ -n "${{ github.event.inputs.symbols }}" ]; then
             SYMBOLS_ARG="--symbols ${{ github.event.inputs.symbols }}"
