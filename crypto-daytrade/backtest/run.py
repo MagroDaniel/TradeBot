@@ -45,6 +45,21 @@ VARIANTS = [
         use_htf_trend_filter=True,
         max_concurrent_same_direction=3,
     ),
+    # Candidatos extraídos dos livros de referência (docs/estrategias_extraidas_livros.md,
+    # item 1 da lista priorizada) — em cima da produção atual (1h), exige que o candle do
+    # sinal tenha corpo inteiro além da EMA21 e fechamento na metade "forte" do candle a
+    # favor da direção. Duas exigências (metade do candle vs. 65% dela) pra ver se a força
+    # extra compensa perder sinais.
+    Variant(
+        name="+ 1h + qualidade do candle (50%)",
+        use_htf_trend_filter=True,
+        min_signal_candle_close_position=0.5,
+    ),
+    Variant(
+        name="+ 1h + qualidade do candle (65%)",
+        use_htf_trend_filter=True,
+        min_signal_candle_close_position=0.65,
+    ),
 ]
 
 

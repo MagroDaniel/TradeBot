@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from analysis.outcomes import check_outcome
 from analysis.signals import generate_signal
-from backtest.filters import passes_adx_filter
+from backtest.filters import passes_adx_filter, passes_signal_candle_quality_filter
 from data.binance_client import Candle
 from storage.signals_store import SignalRecord
 
@@ -33,6 +33,7 @@ class Variant:
     min_adx: float | None = None  # None = sem filtro de ADX
     use_htf_trend_filter: bool = False
     max_concurrent_same_direction: int | None = None  # None = sem limite
+    min_signal_candle_close_position: float | None = None  # None = sem filtro de qualidade
 
 
 @dataclass
@@ -137,6 +138,11 @@ def run_backtest(
                 continue
 
             if variant.min_adx is not None and not passes_adx_filter(window, variant.min_adx):
+                continue
+
+            if variant.min_signal_candle_close_position is not None and not passes_signal_candle_quality_filter(
+                window, signal.direction, variant.min_signal_candle_close_position
+            ):
                 continue
 
             if variant.max_concurrent_same_direction is not None:
