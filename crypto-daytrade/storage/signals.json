@@ -165,9 +165,9 @@
       "rsi_value": 58.86006318415185,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 59 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:20:27.789111+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T01:20:18.883623+00:00",
+      "close_price": 0.8133974088066505
     },
     {
       "symbol": "NEARUSDT",
@@ -178,9 +178,9 @@
       "rsi_value": 58.57291615329619,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 59 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:20:30.060171+00:00",
-      "status": "open",
-      "closed_at": null,
-      "close_price": null
+      "status": "stop_hit",
+      "closed_at": "2026-09-09T01:20:18.883623+00:00",
+      "close_price": 2.3203290988983905
     },
     {
       "symbol": "TAOUSDT",
@@ -204,6 +204,19 @@
       "rsi_value": 53.07992525505509,
       "reason": "EMA9 cruzou acima da EMA21, RSI em 53 (não sobrecomprado)",
       "opened_at": "2026-09-09T00:50:32.675817+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null
+    },
+    {
+      "symbol": "AVAXUSDT",
+      "direction": "short",
+      "entry": 7.96,
+      "stop_loss": 8.004717024025869,
+      "target": 7.8705659519482625,
+      "rsi_value": 40.317192645737286,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 40 (não sobrevendido)",
+      "opened_at": "2026-09-09T01:20:36.636355+00:00",
       "status": "open",
       "closed_at": null,
       "close_price": null
