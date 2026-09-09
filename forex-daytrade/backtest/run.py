@@ -43,6 +43,14 @@ def _variants_for(higher_timeframe: str) -> list[Variant]:
         Variant(name="+ ATR stop 1.0x", atr_stop_multiplier=1.0),
         Variant(name="+ ATR stop 2.5x", atr_stop_multiplier=2.5),
         Variant(name="+ RSI estreito (40-60/40-60)", long_rsi_range=(40.0, 60.0), short_rsi_range=(40.0, 60.0)),
+        # combo dos dois candidatos que mais melhoraram isoladamente no timeframe de 1h (ver
+        # README.md) — tendência de timeframe maior + RSI mais estreito.
+        Variant(
+            name=f"+ tendência {higher_timeframe} + RSI estreito",
+            use_htf_trend_filter=True,
+            long_rsi_range=(40.0, 60.0),
+            short_rsi_range=(40.0, 60.0),
+        ),
     ]
 
 
