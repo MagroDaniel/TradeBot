@@ -190,6 +190,37 @@ def test_send_raises_when_telegram_returns_ok_false_despite_http_200(monkeypatch
         TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", [_pick()])
 
 
+def test_send_daily_picks_shows_market_hold_when_present(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", market_hold=0.018)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    text = sent["text"]
+    assert "hold +1.8%" in text
+    assert "hold é a margem sintética" in text  # rodapé explicativo aparece
+
+
+def test_send_daily_picks_negative_hold_shown_with_minus_sign(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", market_hold=-0.004)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert "hold -0.4%" in sent["text"]
+
+
+def test_send_daily_picks_omits_hold_and_explainer_when_absent(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate", market_hold=None)]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    text = sent["text"]
+    assert "hold" not in text
+    assert "margem sintética" not in text
+
+
 def test_send_daily_picks_no_games_today(monkeypatch):
     sent = _capture_sent_text(monkeypatch)
 

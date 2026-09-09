@@ -2,10 +2,19 @@
 
 Leitura dos 3 PDFs em `docs/referencias/` (texto extraído via `pdftotext`, ~580 páginas no total,
 mais uma resenha de 5 páginas). Este documento resume o que é **potencialmente aplicável** ao
-`sports-betting` — nada aqui foi implementado ainda. Mesmo processo já usado no `crypto-daytrade`
-(ver `crypto-daytrade/docs/estrategias_extraidas_livros.md`): **nenhuma ideia daqui vai pra
-produção sem passar pelo `backtest/backtester.py` primeiro** (ou, pro item de CLV, sem antes
-resolver a questão de dados descrita abaixo) — livro é hipótese, backtest é quem decide.
+`sports-betting`. Mesmo processo já usado no `crypto-daytrade`
+(ver `crypto-daytrade/docs/estrategias_extraidas_livros.md`): livro é hipótese, o que decide é
+teste contra dado real — nesse caso, os itens 1 e 2 foram implementados (são features
+autocontidas, sem exigir re-treino ou mudança de critério de decisão), o item 3 foi investigado
+com uma checagem real contra o histórico (resultado abaixo), e o item 4 segue pendente de uma
+decisão de produto (custo de API adicional).
+
+**Status**: ✅ item 1 (hold sintético) implementado — `analysis/ev.py::market_hold`,
+`main.py::_synthetic_holds_by_selection`, exibido no Telegram. ✅ item 2 (combos do mesmo jogo)
+implementado — `model/poisson_model.py::match_probabilities` ganhou os 6 combos resultado×total,
+ainda sem uso em picks reais (ver ressalva no item). ✅ item 3 investigado — achado real abaixo,
+nenhuma mudança de código aplicada a partir dele ainda (é sobre calibração do modelo, uma decisão
+de correção seria um passo à parte). ⏳ item 4 aguardando decisão do usuário.
 
 ## Livros lidos
 
@@ -25,7 +34,7 @@ resolver a questão de dados descrita abaixo) — livro é hipótese, backtest �
 
 ## Ideias com maior relação esforço/retorno (ordenadas por prioridade sugerida)
 
-### 1. Hold sintético entre casas como sinal de confiança extra — `analysis/ev.py` ou novo módulo
+### 1. ✅ Hold sintético entre casas como sinal de confiança extra — implementado
 **Fonte: Logic of Sports Betting, cap. "Betting The Best Price" / "Chopping The Hold".**
 
 O livro descreve o conceito central de "hold sintético": em vez de olhar o hold de uma casa só,
@@ -47,10 +56,18 @@ pick no Telegram, ou logar pra revisão manual. Hold sintético baixo/negativo �
 estimativa) de que aquele mercado específico está "mais aberto" — complementa, não substitui, o EV
 calculado pelo modelo.
 
-→ **Candidato mais barato de testar**: função pura nova em `analysis/`, sem I/O, testável isolada
-como `ev.py`/`kelly.py` já são. Baixo esforço, zero custo de crédito de API adicional.
+**Implementado**: `analysis/ev.py::market_hold(decimal_odds)` (função pura, testada) calcula o
+hold de qualquer mercado completo. `main.py::_market_partitions` define as 3 partições completas
+do evento (1X2, over/under 2.5, BTTS — dupla chance fica de fora, suas 3 seleções se sobrepõem e
+não formam partição de verdade) e `_synthetic_holds_by_selection` calcula o hold sintético de
+cada uma (só quando as odds de todas as pernas da partição foram cotadas). `Pick` ganhou o campo
+`market_hold` (`None` quando a partição não estava completa, ou em picks salvos antes desse
+campo existir). A mensagem do Telegram mostra `🔀 hold +1.8%` ao lado do EV de cada pick, com um
+rodapé explicando o conceito (só aparece se algum pick do dia tiver o campo preenchido).
+Não virou filtro — é contexto adicional, mesmo espírito do resto do bot (só alerta, decisão é
+do usuário).
 
-### 2. Combos do mesmo jogo usando a probabilidade conjunta exata do modelo — `model/poisson_model.py`
+### 2. ✅ Combos do mesmo jogo usando a probabilidade conjunta exata do modelo — implementado (só no modelo)
 **Fonte: Logic of Sports Betting, cap. "Parlays" (seção "Correlated Parlays").**
 
 O livro descreve "parlays correlacionados": combinar duas seleções do **mesmo jogo** (ex: time
@@ -68,16 +85,20 @@ o bilhete de múltipla que acabamos de implementar (que multiplica probabilidade
 diferentes assumindo independência — correto pra jogos diferentes, mas seria matematicamente errado
 pra seleções do mesmo jogo).
 
-→ **Candidato de esforço baixo/médio**: adicionar alguma combinação de seleções do mesmo jogo (ex:
-`home_win_and_over_2_5`) ao dict retornado por `match_probabilities()`, reaproveitando a grade que
-já existe — não precisa de novo dado, só de mais uma soma dentro do loop que já roda. O desafio
-real não é o modelo, é achar odd de mercado pra comparar: a The Odds API (free tier) provavelmente
-não oferece o mercado combinado (`same game parlay`) pra futebol como mercado cotado — precisa
-confirmar se `ADDITIONAL_MARKETS` aceita algo do tipo antes de prometer isso como pick real; sem
-isso, funciona só como estatística informativa (mesmo espírito do bilhete de múltipla: prioriza
-"o modelo sabe algo a mais", não necessariamente vira aposta cotável).
+**Implementado**: `PoissonModel.match_probabilities()` agora devolve também
+`home_win_and_over_2_5`, `home_win_and_under_2_5`, `draw_and_over_2_5`, `draw_and_under_2_5`,
+`away_win_and_over_2_5`, `away_win_and_under_2_5` — todos somados direto da grade já calculada
+(nenhum loop novo, só mais acumuladores no loop existente). Testes confirmam que são a
+probabilidade conjunta exata, não o produto ingênuo das marginais (`test_same_game_combo_not_naive_product_of_marginals`
+falharia se alguém "simplificasse" isso por engano).
 
-### 3. Viés de mercado em favoritos fortes e empates equilibrados — hipótese pra investigar, não implementar direto
+**Ainda não vira pick real**: não confirmamos se a The Odds API oferece um mercado cotável de
+"resultado + total" combinado (`same game parlay`) pra futebol no free tier — sem isso, não tem
+odd de mercado pra comparar e calcular EV. Os campos ficam disponíveis no modelo (testados,
+prontos pra uso), mas `main.py` ainda não os consome. Confirmar isso na documentação da Odds API
+é o próximo passo antes de virar pick de verdade.
+
+### 3. ✅ Viés de favorito forte/empate equilibrado — investigado, achado real (diferente do esperado)
 **Fonte: Soccermatics, cap. 12 ("Putting My Money Where My Mouth Is").**
 
 Sumpter testou, com dados reais da Premier League 2014/15, que:
@@ -94,12 +115,51 @@ empataram.
 
 Isso é uma hipótese de literatura acadêmica (o livro cita estudos prévios), não uma descoberta
 nova, e o próprio autor avisa: **se o viés for divulgado o suficiente, o mercado corrige e ele
-some** — não é garantia. Não deveria virar um filtro automático sem validação própria.
+some** — não é garantia.
 
-→ **Candidato de teste**: rodar essa mesma checagem (odds implícitas vs. resultado real) sobre o
-histórico já carregado em `HISTORICAL_DATA_DIR`, pra ver se o viés aparece nos dados que o bot já
-usa, antes de cogitar qualquer mudança de código. Isso é um trabalho de `backtest/`, não de
-`model/`.
+**Ressalva importante**: os CSVs em `HISTORICAL_DATA_DIR` só têm placar, nunca tiveram odds de
+mercado — não dá pra repetir o teste do Sumpter (odds do bookmaker vs. resultado real) com esse
+dado. O que dá pra testar é uma pergunta relacionada, mas diferente: **o nosso próprio modelo de
+Poisson está bem calibrado**, ou tem viés sistemático nalguma faixa de probabilidade?
+
+**Implementado e executado**: `backtest/calibration.py` (função pura, testada) separa os jogos de
+cada competição por data (80% mais antigos pra treino, 20% mais recentes pra teste, nunca vistos
+pelo `fit()`), calibra o modelo só com o treino e compara a probabilidade prevista com a
+frequência real observada, em faixas de 10 pontos percentuais, pra cada resultado (mandante/
+empate/visitante). Rodável via `python -m backtest.run_calibration_check`.
+
+**Resultado real, contra as 6 fontes de dado independentes** (Brasileirão + 5 ligas europeias; as
+3 copas UEFA compartilham o mesmo CSV combinado — não contam como evidência extra):
+
+> **O nosso modelo tende a SUPERESTIMAR a própria confiança quando prevê um favorito forte**
+> (mandante ou visitante com probabilidade prevista > ~60%) — na faixa de 0.6 a 0.9 de
+> probabilidade prevista, a frequência real de vitória ficou abaixo do previsto em praticamente
+> todas as competições, de forma consistente:
+> - Brasileirão: previsto 0.64-0.72 → observado 0.59-0.66 (gap de -5 a -7 p.p.)
+> - Premier League: previsto 0.64-0.73 → observado 0.56-0.73 (gap de até -10 p.p. na faixa 0.6-0.7)
+> - Ligue 1: previsto 0.75-0.83 → observado 0.66-0.75 (gap de -8 a -9 p.p.)
+> - Serie A (Itália): previsto 0.83-0.93 → observado 0.57-0.61 (gap de até -35 p.p., mas amostra
+>   pequena — 64 e 21 jogos nesses bins específicos, tratar com cautela)
+> - La Liga: mais ruído (ora acima, ora abaixo), sem viés claro na cauda alta
+> - Bundesliga: a mais bem calibrada das 6 — gaps pequenos (< 5 p.p.) em quase todas as faixas
+>
+> O mesmo padrão aparece, mais fraco, pra vitórias fora de casa em faixa alta de probabilidade.
+> Já os empates estão razoavelmente bem calibrados nas faixas com volume de dado suficiente
+> (~20-30% previsto, onde mora a maior parte da amostra) — gaps de 1-4 p.p., dentro do ruído.
+
+Isso é o **oposto** do que Sumpter achou pro mercado (que subestima favoritos fortes) — não é
+comparável diretamente (são perguntas diferentes: viés do mercado vs. calibração do nosso
+modelo), mas é um achado real e acionável por si só: quando o modelo prevê um favorito muito
+forte, ele tende a estar mais confiante do que deveria. Isso é consistente com — e dá um número
+concreto para — o aviso que já existe no rodapé do Telegram (`_EV_EXPLAINER`: "EV muito alto
+também pode ser sinal de erro do modelo, não de oportunidade real").
+
+**Nenhuma correção foi aplicada** — isso é uma investigação, não uma feature. Uma correção
+(ex: um fator de encolhimento pra probabilidades extremas, "puxando" previsões muito altas um
+pouco pra baixo) seria uma mudança de comportamento do modelo que merece sua própria validação
+(será que reduz o ROI real dos picks já resolvidos em `storage/picks.json`, ou só parece melhor
+na teoria?) — decisão pro usuário tomar, não algo pra aplicar sozinho a partir de uma única
+checagem de calibração.
 
 ### 4. Closing Line Value (CLV) — já está no roadmap do README, aqui está o método concreto
 **Fonte: Logic of Sports Betting, cap. "Market Agreement and Resistance" e "How Do I Know If I'm
@@ -161,12 +221,10 @@ oferece mais mercados derivados pra futebol (ex: handicap asiático) que ainda n
 
 ## Próximos passos sugeridos
 
-Nenhuma mudança de código ainda — na ordem de esforço/retorno acima:
-1. Hold sintético entre casas (item 1) é o mais barato e mais alinhado com o que o bot já faz — bom
-   primeiro passo se o usuário topar.
-2. Combos do mesmo jogo via grade de Poisson (item 2) é o mais interessante do ponto de vista de
-   modelo, mas depende de confirmar se há mercado cotável pra comparar antes de virar um pick real.
-3. Viés de favorito forte/empate equilibrado (item 3) precisa de validação com os dados históricos
-   já existentes antes de qualquer mudança de código — é hipótese de literatura, não fato
-   confirmado pros nossos dados.
-4. CLV (item 4) é decisão de produto (custo de API extra) antes de ser tarefa de código.
+Itens 1, 2 e 3 já foram trabalhados (ver status de cada um acima). O que sobra:
+1. Confirmar se a The Odds API tem algum mercado de "resultado + total" combinado pra futebol
+   (item 2) — sem isso os combos do modelo continuam sem uso real em picks.
+2. Decidir se vale investigar uma correção de calibração pra favoritos fortes (item 3) — e, se
+   sim, validar contra `storage/picks.json` real antes de mudar `model/poisson_model.py`.
+3. CLV (item 4) é decisão de produto (custo de API extra) antes de ser tarefa de código — ver
+   opções levantadas com o usuário.

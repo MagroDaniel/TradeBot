@@ -53,6 +53,37 @@ def test_double_chance_matches_sum_of_underlying_outcomes(fitted_model):
     assert probs["double_chance_home_or_away"] == pytest.approx(probs["home_win"] + probs["away_win"])
 
 
+def test_same_game_combos_sum_to_marginal_result(fitted_model):
+    # home_win_and_over_2_5 + home_win_and_under_2_5 tem que fechar em home_win (partição
+    # exaustiva do mesmo resultado por total de gols) — vale pros 3 resultados.
+    probs = fitted_model.match_probabilities("Time A", "Time B")
+    assert probs["home_win_and_over_2_5"] + probs["home_win_and_under_2_5"] == pytest.approx(
+        probs["home_win"]
+    )
+    assert probs["draw_and_over_2_5"] + probs["draw_and_under_2_5"] == pytest.approx(probs["draw"])
+    assert probs["away_win_and_over_2_5"] + probs["away_win_and_under_2_5"] == pytest.approx(
+        probs["away_win"]
+    )
+
+
+def test_same_game_combos_sum_to_marginal_total(fitted_model):
+    # somando os 3 resultados pro mesmo total (over ou under) tem que fechar em over_2_5/under_2_5
+    probs = fitted_model.match_probabilities("Time A", "Time B")
+    over_total = (
+        probs["home_win_and_over_2_5"] + probs["draw_and_over_2_5"] + probs["away_win_and_over_2_5"]
+    )
+    assert over_total == pytest.approx(probs["over_2_5"])
+
+
+def test_same_game_combo_not_naive_product_of_marginals(fitted_model):
+    # a probabilidade conjunta exata não é (nem deveria ser) o produto das marginais — resultado
+    # e total de gols não são independentes na grade de Poisson (mandante goleando empurra pro
+    # over). Esse teste falharia se alguém "simplificasse" pra home_win * over_2_5 por engano.
+    probs = fitted_model.match_probabilities("Time A", "Time C")  # times bem diferentes de força
+    naive = probs["home_win"] * probs["over_2_5"]
+    assert probs["home_win_and_over_2_5"] != pytest.approx(naive)
+
+
 def test_matches_without_date_are_unweighted():
     # Sem match_date, a ponderação temporal não tem o que fazer — deve se comportar
     # exatamente como o modelo sem ponderação (half_life_days=None).

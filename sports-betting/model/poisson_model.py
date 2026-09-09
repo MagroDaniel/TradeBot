@@ -124,25 +124,42 @@ class PoissonModel:
         return home_xg, away_xg
 
     def match_probabilities(self, home_team: str, away_team: str) -> dict[str, float]:
-        """Probabilidades de resultado 1X2, over/under 2.5 gols, ambas marcam (BTTS) e
-        dupla chance — todas derivadas da mesma grade de Poisson (placar a placar), sem
-        precisar de mais nenhum dado histórico além do que já calibra o 1X2."""
+        """Probabilidades de resultado 1X2, over/under 2.5 gols, ambas marcam (BTTS), dupla
+        chance e combos resultado+total do mesmo jogo — todas derivadas da mesma grade de
+        Poisson (placar a placar), sem precisar de mais nenhum dado histórico além do que já
+        calibra o 1X2.
+
+        Os combos (`home_win_and_over_2_5` etc.) são a probabilidade CONJUNTA exata da grade —
+        não o produto das probabilidades marginais (que assumiria independência entre resultado
+        e total de gols, o que é falso: um mandante que goleia empurra o jogo pro over junto).
+        Ver docs/estrategias_extraidas_livros.md, item 2 — ainda não usados em nenhum pick real
+        (não há mercado cotado pra comparar), ficam disponíveis pra quando/se houver."""
         home_xg, away_xg = self.expected_goals(home_team, away_team)
 
         home_win = draw = away_win = 0.0
         over_2_5 = 0.0
         btts_yes = 0.0
+        home_win_over = home_win_under = 0.0
+        draw_over = draw_under = 0.0
+        away_win_over = away_win_under = 0.0
 
         for hg in range(self.max_goals + 1):
             for ag in range(self.max_goals + 1):
                 p = _poisson_pmf(hg, home_xg) * _poisson_pmf(ag, away_xg)
+                over = hg + ag > 2
                 if hg > ag:
                     home_win += p
+                    home_win_over += p if over else 0.0
+                    home_win_under += 0.0 if over else p
                 elif hg == ag:
                     draw += p
+                    draw_over += p if over else 0.0
+                    draw_under += 0.0 if over else p
                 else:
                     away_win += p
-                if hg + ag > 2:
+                    away_win_over += p if over else 0.0
+                    away_win_under += 0.0 if over else p
+                if over:
                     over_2_5 += p
                 if hg > 0 and ag > 0:
                     btts_yes += p
@@ -158,4 +175,10 @@ class PoissonModel:
             "double_chance_home_or_draw": home_win + draw,
             "double_chance_away_or_draw": away_win + draw,
             "double_chance_home_or_away": home_win + away_win,
+            "home_win_and_over_2_5": home_win_over,
+            "home_win_and_under_2_5": home_win_under,
+            "draw_and_over_2_5": draw_over,
+            "draw_and_under_2_5": draw_under,
+            "away_win_and_over_2_5": away_win_over,
+            "away_win_and_under_2_5": away_win_under,
         }

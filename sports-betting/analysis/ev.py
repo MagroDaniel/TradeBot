@@ -25,3 +25,21 @@ def calculate_ev(model_probability: float, decimal_odds: float) -> float:
     a probabilidade real do evento justificaria (aposta de valor / +EV).
     """
     return (model_probability * decimal_odds) - 1
+
+
+def market_hold(decimal_odds: list[float]) -> float:
+    """Hold (margem/vig) de um mercado completo e mutuamente exclusivo: soma das
+    probabilidades implícitas de todas as seleções, menos 1. Mesmo cálculo que alimenta
+    `remove_overround`, só que aqui devolvemos o hold em si, não as probabilidades normalizadas.
+
+    Usado tanto pro hold "normal" (todas as odds da mesma casa) quanto pro "hold sintético"
+    entre casas diferentes — pegando a melhor odd de cada seleção antes de somar, como descrito
+    em "The Logic of Sports Betting" (Miller & Davidow) e resumido em
+    docs/estrategias_extraidas_livros.md, item 1. Hold baixo/negativo nesse segundo caso é sinal
+    de que as casas discordam entre si o suficiente pra que o mercado fique "mais aberto" —
+    um sinal independente da nossa própria estimativa de probabilidade.
+
+    `decimal_odds` precisa cobrir TODAS as seleções do mercado (ex: as 3 do 1X2, ou as 2 de
+    over/under) — hold de um subconjunto não tem o mesmo significado.
+    """
+    return sum(implied_probability(o) for o in decimal_odds) - 1

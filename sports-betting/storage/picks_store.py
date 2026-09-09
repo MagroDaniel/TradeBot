@@ -27,6 +27,10 @@ class Pick:
     profit_units: float | None = None
     bookmaker: str | None = None  # casa de apostas que ofereceu a melhor odd (None em picks
     # salvos antes desse campo existir — carregados via Pick(**p), o default cobre isso)
+    market_hold: float | None = None  # hold sintético do mercado completo dessa seleção (melhor
+    # odd por seleção entre casas — ver analysis/ev.py::market_hold). None quando o mercado não
+    # tinha as duas/três pernas cotadas (ex: dupla chance não forma partição completa) ou em
+    # picks salvos antes desse campo existir.
 
 
 class PicksStore:

@@ -134,9 +134,27 @@ vêm de `média_liga × ataque_do_atacante × defesa_do_adversário`; `match_pro
 de Poisson truncada (`max_goals`, padrão 8) uma única vez e deriva **todos** os mercados dela (1X2,
 over/under 2.5, BTTS, dupla chance) — probabilidades 1X2 somam ~1.0 mas não exatamente por causa do
 truncamento (ver a tolerância em `test_match_probabilities_sum_to_one`). Times não vistos na calibração
-histórica levantam `KeyError` — quem chama (`main.py::_evaluate_event`) captura isso por evento e pula em
-vez de derrubar a execução inteira, já que os nomes dos times na odds API e no CSV histórico precisam bater
-exatamente (ver `data/team_aliases.py` abaixo).
+histórica levantam `KeyError` — quem chama (`main.py::_selection_candidates`) captura isso por evento e
+pula em vez de derrubar a execução inteira, já que os nomes dos times na odds API e no CSV histórico
+precisam bater exatamente (ver `data/team_aliases.py` abaixo).
+
+**Combos do mesmo jogo**: `match_probabilities()` também devolve 6 probabilidades conjuntas
+resultado×total (`home_win_and_over_2_5`, `home_win_and_under_2_5`, `draw_and_over_2_5`,
+`draw_and_under_2_5`, `away_win_and_over_2_5`, `away_win_and_under_2_5`), somadas direto da mesma grade —
+probabilidade CONJUNTA exata, não o produto ingênuo das marginais (que assumiria independência entre
+resultado e total, falso: mandante goleando empurra pro over). Ver
+`test_same_game_combo_not_naive_product_of_marginals`. **Ainda sem consumidor em `main.py`** — não
+confirmamos se a Odds API tem mercado cotável de "resultado + total" combinado pra futebol; os campos
+existem e são testados, prontos pra quando/se houver odd real pra comparar (ver
+docs/estrategias_extraidas_livros.md, item 2).
+
+**Calibração** (`backtest/calibration.py`, rodável via `python -m backtest.run_calibration_check`):
+separa o histórico por data (80/20 treino/teste) e compara probabilidade prevista com frequência
+observada, por faixa de 10 p.p., pra cada resultado. Achado real (documentado em
+docs/estrategias_extraidas_livros.md, item 3): o modelo tende a SUPERESTIMAR a própria confiança
+quando prevê um favorito forte (mandante ou visitante > ~60% de probabilidade) — a faixa mais alta
+prevista sistematicamente teve frequência real menor, em quase todas as 6 fontes de dado
+independentes. Nenhuma correção foi aplicada a partir disso ainda.
 
 **Ponderação temporal (`half_life_days`)**: a calibração pesa jogos recentes mais que antigos por
 decaimento exponencial (peso cai pela metade a cada `half_life_days`; padrão 1095 = 3 anos, configurável via
@@ -154,6 +172,17 @@ Responsabilidades deliberadamente separadas: `ev.py` só compara a probabilidade
 mercado (`prob_modelo × odd - 1`); `kelly.py` só dimensiona o stake dado um edge (Kelly fracionário, padrão
 25% do Kelly cheio, travado em `MAX_STAKE_FRACTION` da banca). Ambos são funções puras, sem I/O — mantenha
 assim, é o que permite testá-los sem mocks.
+
+**Hold sintético** (`ev.py::market_hold`, ver docs/estrategias_extraidas_livros.md item 1): soma das
+probabilidades implícitas de um mercado completo, menos 1 — mesmo cálculo que alimenta
+`remove_overround`, só que devolvendo o hold em vez das probabilidades normalizadas. `main.py`
+(`_market_partitions` + `_synthetic_holds_by_selection`) usa isso pra calcular, por evento, o hold
+"sintético" de cada mercado completo (1X2, over/under 2.5, BTTS — dupla chance fica de fora, suas 3
+seleções se sobrepõem e não formam uma partição de verdade) pegando a melhor odd de cada seleção,
+possivelmente de casas diferentes. `Pick.market_hold` guarda isso (`None` se a partição não tinha todas
+as pernas cotadas). Aparece no Telegram como `🔀 hold ±X%` ao lado do EV — hold baixo/negativo é sinal
+de que as casas discordam entre si, **independente** da nossa própria estimativa de probabilidade.
+Puramente informativo, não filtra nem muda o sizing de stake.
 
 ### Fronteira de acesso a dados
 
@@ -194,7 +223,7 @@ dado. Ver o roadmap do README ("Normalização entre ligas") — melhoria conhec
 **Nomes de times (`data/team_aliases.py`)**: a Odds API e os CSVs históricos usam nomenclaturas diferentes
 pro mesmo time (ex: "Botafogo" vs. "Botafogo-RJ", "Manchester United" vs. "Man United"). `TEAM_ALIASES` é um
 dict único global (nomes não colidem entre competições) mapeando Odds API → CSV, aplicado só na hora de
-consultar o modelo (`main.py::_evaluate_event`) — os nomes exibidos no Telegram e salvos em `Pick`
+consultar o modelo (`main.py::_selection_candidates`) — os nomes exibidos no Telegram e salvos em `Pick`
 continuam sendo os originais da Odds API. Times genuinamente sem histórico no CSV (recém-promovidos, ou
 clubes de ligas não cobertas) não têm solução por alias — continuam sendo pulados via `KeyError`, o que é o
 comportamento correto. **Cuidado com nomes duplicados dentro da própria fonte histórica**: o dataset
@@ -302,10 +331,12 @@ Pendências conhecidas (decisões conscientes, não bugs):
 - Modelo combinado das copas UEFA não normaliza diferença de padrão de gols entre as 5 ligas domésticas
   (ver "Fronteira de acesso a dados" acima) — simplificação deliberada, não uma modelagem por-liga completa.
 - `docs/estrategias_extraidas_livros.md` lista ideias extraídas de 3 livros de referência sobre apostas
-  esportivas (`docs/referencias/`) — hold sintético entre casas, combos do mesmo jogo via grade de Poisson,
-  viés de mercado em favoritos/empates, CLV. Nada disso foi implementado ainda; qualquer mudança futura
-  baseada nesses livros precisa passar pelo `backtest/` antes (mesmo processo já estabelecido pro
-  `crypto-daytrade`) — livro é hipótese, backtest é quem decide.
+  esportivas (`docs/referencias/`). Hold sintético entre casas (`analysis/ev.py::market_hold`, ver
+  "Lógica financeira" abaixo) e combos do mesmo jogo (`PoissonModel.match_probabilities`, ver "Modelo"
+  abaixo) já foram implementados. Viés de favorito forte/empate foi investigado com uma checagem real de
+  calibração (`backtest/calibration.py`) — achado real documentado no arquivo, nenhuma correção aplicada
+  ainda (decisão do usuário). CLV segue pendente de decisão de produto (custo de API extra pra ter uma
+  odd de "fechamento" — hoje o bot só busca odds 1x de manhã).
 
 ## Projeto irmão
 
