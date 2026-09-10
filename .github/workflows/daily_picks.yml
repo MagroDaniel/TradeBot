@@ -32,7 +32,12 @@ jobs:
           ODDS_API_KEYS_EXTRA: ${{ secrets.ODDS_API_KEYS_EXTRA }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # ANTHROPIC_API_KEY desativada de propósito (decisão do usuário, 09/09/2026): a
+          # checagem de notícias não influencia a decisão do pick (é só informativa), então não
+          # vale o custo de token. Sem essa variável, config.ANTHROPIC_API_KEY vira None e
+          # main.py::_check_news retorna {} sem chamar a API — o secret continua guardado no
+          # GitHub, só não é mais repassado pro job. Pra reativar, devolva esta linha:
+          # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python main.py
 
       - name: Salvar histórico de picks atualizado
