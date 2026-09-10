@@ -72,6 +72,25 @@ class SignalsStore:
         data["last_report_date"] = iso_date
         self._write(data)
 
+    def get_last_weekly_report_date(self) -> str | None:
+        """Mesma ideia de `get_last_report_date`, mas pro relatório semanal (toda
+        segunda-feira) — chave separada pra não colidir com o corte diário."""
+        return self._read().get("last_weekly_report_date")
+
+    def set_last_weekly_report_date(self, iso_date: str) -> None:
+        data = self._read()
+        data["last_weekly_report_date"] = iso_date
+        self._write(data)
+
+    def get_last_monthly_report_date(self) -> str | None:
+        """Mesma ideia, pro relatório mensal (todo dia 1)."""
+        return self._read().get("last_monthly_report_date")
+
+    def set_last_monthly_report_date(self, iso_date: str) -> None:
+        data = self._read()
+        data["last_monthly_report_date"] = iso_date
+        self._write(data)
+
     def update(self, updated: list[SignalRecord]) -> None:
         """Substitui os registros pelos atualizados, casando por (symbol, opened_at) — chave
         natural já que um símbolo pode ter vários sinais ao longo do tempo."""

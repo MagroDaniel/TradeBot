@@ -54,6 +54,74 @@ def send_daily_report_if_needed(store: SignalsStore, notifier: TelegramNotifier)
     store.set_last_report_date(today)
 
 
+def send_weekly_report_if_needed(store: SignalsStore, notifier: TelegramNotifier) -> None:
+    """Toda segunda-feira (BRT), resume os sinais fechados nos últimos 7 dias corridos (a
+    semana anterior) — mesmo racional do relatório diário (`send_daily_report_if_needed`),
+    só que a cada 7 dias em vez de todo dia, pra dar uma visão semanal sem precisar somar as
+    mensagens diárias na mão. Pedido do usuário (2026-09-10) — a frequência baixa de sinal
+    desde o filtro de range (~1/dia) tornava difícil acompanhar só pelas mensagens diárias."""
+    today = today_brt()
+    if today.weekday() != 0:  # 0 = segunda-feira
+        return
+    today_iso = today.isoformat()
+    if store.get_last_weekly_report_date() == today_iso:
+        return  # já mandou essa semana, não repete a cada execução de 10 em 10 min
+
+    period_end = today  # exclusivo
+    period_start = today - timedelta(days=7)
+    records = [
+        r for r in store.all_signals()
+        if r.closed_at and period_start <= date_brt(r.closed_at) < period_end
+    ]
+    summary = summarize(records)
+
+    try:
+        notifier.send_weekly_report(
+            period_start.isoformat(), (period_end - timedelta(days=1)).isoformat(), summary, records
+        )
+    except Exception:
+        logger.exception("Falha ao enviar relatório semanal")
+        return  # não marca como enviado — tenta de novo na próxima execução
+
+    logger.info(
+        "Relatório semanal de %s a %s enviado (%d sinal(is) resolvido(s))",
+        period_start.isoformat(), (period_end - timedelta(days=1)).isoformat(), len(records),
+    )
+    store.set_last_weekly_report_date(today_iso)
+
+
+def send_monthly_report_if_needed(store: SignalsStore, notifier: TelegramNotifier) -> None:
+    """Todo dia 1 (BRT), resume os sinais fechados no mês calendário anterior inteiro — mesmo
+    padrão do semanal acima, granularidade maior."""
+    today = today_brt()
+    if today.day != 1:
+        return
+    today_iso = today.isoformat()
+    if store.get_last_monthly_report_date() == today_iso:
+        return
+
+    this_month_start = today.replace(day=1)
+    prev_month_end = this_month_start - timedelta(days=1)
+    prev_month_start = prev_month_end.replace(day=1)
+    records = [
+        r for r in store.all_signals()
+        if r.closed_at and prev_month_start <= date_brt(r.closed_at) < this_month_start
+    ]
+    summary = summarize(records)
+    month_label = f"{prev_month_start.year}-{prev_month_start.month:02d}"
+
+    try:
+        notifier.send_monthly_report(month_label, summary, records)
+    except Exception:
+        logger.exception("Falha ao enviar relatório mensal")
+        return
+
+    logger.info(
+        "Relatório mensal de %s enviado (%d sinal(is) resolvido(s))", month_label, len(records)
+    )
+    store.set_last_monthly_report_date(today_iso)
+
+
 def resolve_open_signals(client: BinanceClient, store: SignalsStore, notifier: TelegramNotifier) -> None:
     open_signals = store.open_signals()
     if not open_signals:
@@ -186,6 +254,8 @@ def main() -> None:
     notifier = TelegramNotifier(config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID)
 
     send_daily_report_if_needed(store, notifier)
+    send_weekly_report_if_needed(store, notifier)
+    send_monthly_report_if_needed(store, notifier)
     resolve_open_signals(client, store, notifier)
     scan_for_new_signals(client, store, notifier)
 

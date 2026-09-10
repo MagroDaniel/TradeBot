@@ -118,3 +118,51 @@ def test_daily_report_lists_every_record_win_and_loss(monkeypatch):
     assert "1✅" in text
     assert "1❌" in text
     assert "1⌛" in text
+
+
+def test_weekly_report_with_no_records(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+
+    TelegramNotifier("token", "chat").send_weekly_report(
+        "2026-09-01", "2026-09-07", summarize([]), []
+    )
+
+    assert "Relatório semanal" in sent["text"]
+    assert "2026-09-01" in sent["text"] and "2026-09-07" in sent["text"]
+    assert "Nenhum sinal resolvido" in sent["text"]
+
+
+def test_weekly_report_lists_every_record(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    records = [
+        _signal(symbol="BTCUSDT", status="target_hit", close_price=110.0),
+        _signal(symbol="ETHUSDT", status="stop_hit", close_price=95.0),
+    ]
+
+    TelegramNotifier("token", "chat").send_weekly_report(
+        "2026-09-01", "2026-09-07", summarize(records), records
+    )
+
+    text = sent["text"]
+    assert "BTCUSDT" in text and "✅" in text
+    assert "ETHUSDT" in text and "❌" in text
+
+
+def test_monthly_report_with_no_records(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+
+    TelegramNotifier("token", "chat").send_monthly_report("2026-08", summarize([]), [])
+
+    assert "Relatório mensal" in sent["text"]
+    assert "2026-08" in sent["text"]
+    assert "Nenhum sinal resolvido" in sent["text"]
+
+
+def test_monthly_report_lists_every_record(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    records = [_signal(symbol="SOLUSDT", status="expired", close_price=101.0)]
+
+    TelegramNotifier("token", "chat").send_monthly_report("2026-08", summarize(records), records)
+
+    text = sent["text"]
+    assert "SOLUSDT" in text and "⌛" in text

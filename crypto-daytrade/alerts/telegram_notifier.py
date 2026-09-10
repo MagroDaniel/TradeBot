@@ -92,3 +92,45 @@ class TelegramNotifier:
             f"— acerto de {summary.win_rate:.0%} (sobre sinais decisivos, sem contar expirados)"
         )
         self._send("\n".join(lines))
+
+    def _send_periodic_report(
+        self,
+        title: str,
+        period_label: str,
+        summary: PerformanceSummary,
+        records: list[SignalRecord],
+    ) -> None:
+        """Mesmo formato do relatório diário (lista TODO sinal resolvido no período, vitória
+        e derrota — nunca esconde perda, ver CLAUDE.md), reaproveitado pelo semanal e pelo
+        mensal — só muda o título e a janela de tempo."""
+        if not records:
+            self._send(f"{title} — {period_label}</b>\nNenhum sinal resolvido nesse período.")
+            return
+
+        lines = [f"{title} — {period_label}</b>", ""]
+        for r in records:
+            icon, label = _RESULT_LABELS.get(r.status, ("ℹ️", r.status))
+            close_price = f"{r.close_price:.6g}" if r.close_price is not None else "?"
+            lines.append(f"{icon} {r.symbol} {r.direction.upper()} — {label} (fechou {close_price})")
+
+        lines.append("")
+        lines.append(
+            f"<b>Resumo:</b> {summary.wins}✅ / {summary.losses}❌ / {summary.expired}⌛ "
+            f"— acerto de {summary.win_rate:.0%} (sobre sinais decisivos, sem contar expirados)"
+        )
+        self._send("\n".join(lines))
+
+    def send_weekly_report(
+        self, period_start: str, period_end: str, summary: PerformanceSummary, records: list[SignalRecord]
+    ) -> None:
+        """Toda segunda-feira (BRT) — resume os sinais fechados nos últimos 7 dias, pra dar
+        uma visão semanal sem precisar somar as mensagens diárias na mão."""
+        self._send_periodic_report(
+            "📅 <b>Relatório semanal", f"{period_start} a {period_end}", summary, records
+        )
+
+    def send_monthly_report(
+        self, month_label: str, summary: PerformanceSummary, records: list[SignalRecord]
+    ) -> None:
+        """Todo dia 1 (BRT) — resume os sinais fechados no mês calendário anterior."""
+        self._send_periodic_report("🗓️ <b>Relatório mensal", month_label, summary, records)

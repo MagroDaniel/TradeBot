@@ -91,6 +91,34 @@ def test_get_last_report_date_on_file_without_that_key(tmp_path):
     assert store.get_last_report_date() is None
 
 
+def test_last_weekly_report_date_is_none_by_default(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+
+    assert store.get_last_weekly_report_date() is None
+
+
+def test_set_and_get_last_weekly_report_date(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+
+    store.set_last_weekly_report_date("2026-09-14")
+
+    assert store.get_last_weekly_report_date() == "2026-09-14"
+
+
+def test_last_monthly_report_date_is_none_by_default(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+
+    assert store.get_last_monthly_report_date() is None
+
+
+def test_set_and_get_last_monthly_report_date(tmp_path):
+    store = SignalsStore(tmp_path / "signals.json")
+
+    store.set_last_monthly_report_date("2026-10-01")
+
+    assert store.get_last_monthly_report_date() == "2026-10-01"
+
+
 def test_persists_across_new_instances(tmp_path):
     path = tmp_path / "signals.json"
     SignalsStore(path).add(_record())

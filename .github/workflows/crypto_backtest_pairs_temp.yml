@@ -1,0 +1,44 @@
+name: Crypto — Teste de backtest com mais pares (temporário)
+
+# Workflow temporário só pra validar se a expectância positiva do filtro de range (produção
+# atual, 25 pares) se mantém aumentando o universo de pares (mais líquidos + menos líquidos
+# juntos). Ver crypto-daytrade/CLAUDE.md, "Backtest walk-forward" — regra do projeto é nunca
+# mudar parâmetro de produção sem validar contra dado real primeiro. Remover depois de ler o
+# resultado.
+
+on:
+  workflow_dispatch:
+    inputs:
+      top_symbols_count:
+        description: "Quantos pares (por volume) testar"
+        required: false
+        default: "50"
+      days:
+        description: "Dias de histórico"
+        required: false
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crypto-daytrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Rodar backtest com universo maior de pares
+        env:
+          TELEGRAM_BOT_TOKEN: dummy-for-backtest-only
+          TELEGRAM_CHAT_ID: dummy-for-backtest-only
+          TOP_SYMBOLS_COUNT: ${{ github.event.inputs.top_symbols_count }}
+        run: python -m backtest.run --days ${{ github.event.inputs.days }} --use-current-top
