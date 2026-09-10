@@ -296,6 +296,27 @@ e foi a **única** das 12 variantes com R líquido positivo nas 3 janelas depois
 produção **mantida** com confiança maior, não menor. Detalhes completos em
 `docs/estrategias_extraidas_livros.md`, seção "Revalidação sob o engine de backtest corrigido".
 
+### Teste de aumentar `TOP_SYMBOLS_COUNT` pra gerar mais sinal (2026-09-10) — REPROVADO
+
+Usuário perguntou se dava pra escanear mais pares (hoje 25) pra aumentar a frequência de sinal
+(caiu bastante desde o filtro de range, ~1/dia). Testado via `backtest/run.py --use-current-top`
+com `TOP_SYMBOLS_COUNT=50`, 60 dias — mesma regra do projeto, nunca muda parâmetro de produção
+sem validar primeiro. Resultado da variante de produção (`+ 1h + range 6x`) com 50 pares: 188
+sinais, R líq **-1.10**, PF líq 0.30, drawdown 209R — **muito pior** que o mesmo teste com 25
+pares no mesmo período (R líq +0.17, ver "Engine corrigido..." acima). **Não aplicado.**
+
+Causa provável, visível na lista de símbolos que entraram nos 25 pares extras: vários pares de
+baixíssima liquidez/recém-listados (ex: `牛来USDT` com 43 candles de 15m = listado há ~11h antes
+do início do backtest; `MARSCOINUSDT` com 529 candles = poucos dias; `HOLOUSDT`, `SPCXBUSDT`
+etc.) — o viés de sobrevivência já documentado (`run.py` usa o top de HOJE aplicado
+retroativamente) fica bem mais grave com mais pares, porque estica a amostra até símbolos que
+mal tinham histórico formado no período testado. Mais pares == mais ruído, não mais sinal bom.
+
+**Conclusão**: os 25 pares atuais continuam sendo o universo de produção. Se quiser mais
+frequência de sinal no futuro, o caminho validado não é alargar o universo de pares — seria
+relaxar o próprio filtro de range (`MIN_RANGE_EXPANSION`, hoje 6x) ou testar um timeframe menor,
+sempre validando com backtest antes de qualquer mudança de produção.
+
 ### Mensagens do Telegram (`alerts/telegram_notifier.py`)
 
 `send_signal_alert` mostra entrada/stop/alvo/RSI/motivo + disclaimer fixo (nunca alavancagem, análise
