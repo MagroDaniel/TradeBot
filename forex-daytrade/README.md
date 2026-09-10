@@ -263,8 +263,13 @@ em `alerts/telegram_notifier.py`), nunca como recomendação de produção de ve
 agora persiste (`storage/news_signals.json`, arquivo separado do `storage/signals.json` das
 estratégias de preço) e resolve o resultado de cada sinal (bateu alvo/stop/expirou), do mesmo jeito
 que as outras estratégias — assim dá pra medir expectância real com o tempo, não só comparar "à
-mão". Roda via `.github/workflows/forex_news_alert.yml` (cron nativo, não sub-horário — sem o
-problema de fila do `schedule` do GitHub Actions documentado no CLAUDE.md do cripto).
+mão". Roda via `.github/workflows/forex_news_alert.yml` (cron nativo de 1h — frequência
+>=1h reduz, mas não garante zero, o mesmo risco de fila de agendamento do `schedule` do GitHub
+Actions documentado no CLAUDE.md do cripto; como o sinal só é marcado "visto" depois de
+enviado com sucesso, um atraso ocasional não perde o evento, só atrasa a checagem). Também
+ganhou relatório semanal (toda segunda) e mensal (todo dia 1), mesmo padrão do
+`crypto-daytrade/main.py` (ver `send_weekly_report_if_needed`/`send_monthly_report_if_needed`
+em `news_watch.py`).
 
 ## Próximos passos (nenhum feito ainda — decisão em aberto)
 

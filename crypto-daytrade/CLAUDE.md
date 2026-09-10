@@ -157,6 +157,20 @@ relatório de fim de dia mesmo assim — meia-noite BRT foi escolhida como corte
 pro público do bot (mesmo raciocínio do resto do projeto: BRT em vez do fuso do runner do GitHub Actions,
 que roda em UTC).
 
+### Relatórios semanal e mensal (2026-09-10, pedido do usuário)
+
+Além do relatório diário, `main.py::send_weekly_report_if_needed()` manda um resumo toda
+segunda-feira (BRT) dos sinais fechados nos últimos 7 dias, e
+`send_monthly_report_if_needed()` manda um resumo todo dia 1 (BRT) do mês calendário anterior
+inteiro. Mesmo padrão do diário (checa `store.get_last_weekly_report_date()`/
+`get_last_monthly_report_date()` antes de mandar, pra não repetir a cada execução de 10 em 10
+min; só marca como enviado depois de confirmar o envio). Motivo: desde o filtro de range por
+estrutura de preço (ver acima), a frequência caiu pra ~1 sinal/dia somando os 25 pares — dias
+sem nenhum sinal (e portanto sem relatório diário com conteúdo) viraram comuns, dificultando
+acompanhar só pelas mensagens diárias. `alerts/telegram_notifier.py::send_weekly_report`/
+`send_monthly_report` reaproveitam o mesmo formato do diário (lista todo sinal resolvido,
+vitória e derrota — nunca esconde perda).
+
 ### Armazenamento (`storage/signals_store.py`)
 
 JSON simples (`SignalRecord` — symbol, direction, entry, stop_loss, target, rsi_value, reason, opened_at,
