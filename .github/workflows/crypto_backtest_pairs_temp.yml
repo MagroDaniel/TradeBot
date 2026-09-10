@@ -41,4 +41,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: dummy-for-backtest-only
           TELEGRAM_CHAT_ID: dummy-for-backtest-only
           TOP_SYMBOLS_COUNT: ${{ github.event.inputs.top_symbols_count }}
+          # Binance devolve 451 pra chamada vinda do runner do Actions (datacenter nos EUA) —
+          # precisa do proxy fora dos EUA, mesmo esquema do workflow de produção.
+          BINANCE_API_BASE_URL: ${{ secrets.CRYPTO_BINANCE_PROXY_URL }}
         run: python -m backtest.run --days ${{ github.event.inputs.days }} --use-current-top

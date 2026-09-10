@@ -97,3 +97,77 @@ class TelegramNotifier:
             f"— acerto de {summary.win_rate:.0%} (sobre sinais decisivos, sem contar expirados)"
         )
         self._send("\n".join(lines))
+
+    def _send_periodic_report(
+        self,
+        title: str,
+        period_label: str,
+        summary: PerformanceSummary,
+        records: list[SignalRecord],
+    ) -> None:
+        """Mesmo formato do relatório diário (lista TODO sinal resolvido no período, vitória
+        e derrota — nunca esconde perda, ver CLAUDE.md do cripto), reaproveitado pelo semanal
+        e pelo mensal — só muda o título e a janela de tempo."""
+        if not records:
+            self._send(f"{title} — {period_label}</b>\nNenhum sinal resolvido nesse período.")
+            return
+
+        lines = [f"{title} — {period_label}</b>", ""]
+        for r in records:
+            icon, label = _RESULT_LABELS.get(r.status, ("ℹ️", r.status))
+            close_price = f"{r.close_price:.5f}" if r.close_price is not None else "?"
+            lines.append(f"{icon} {r.symbol} {r.direction.upper()} — {label} (fechou {close_price})")
+
+        lines.append("")
+        lines.append(
+            f"<b>Resumo:</b> {summary.wins}✅ / {summary.losses}❌ / {summary.expired}⌛ "
+            f"— acerto de {summary.win_rate:.0%} (sobre sinais decisivos, sem contar expirados)"
+        )
+        self._send("\n".join(lines))
+
+    def send_weekly_report(
+        self, period_start: str, period_end: str, summary: PerformanceSummary, records: list[SignalRecord]
+    ) -> None:
+        """Toda segunda-feira (BRT) — resume os sinais fechados nos últimos 7 dias."""
+        self._send_periodic_report(
+            "📅 <b>[FOREX] Relatório semanal", f"{period_start} a {period_end}", summary, records
+        )
+
+    def send_monthly_report(
+        self, month_label: str, summary: PerformanceSummary, records: list[SignalRecord]
+    ) -> None:
+        """Todo dia 1 (BRT) — resume os sinais fechados no mês calendário anterior."""
+        self._send_periodic_report("🗓️ <b>[FOREX] Relatório mensal", month_label, summary, records)
+
+    # --- Estratégia de notícia (experimental — ver analysis/news_signals.py) ---
+    #
+    # Métodos separados de propósito, em vez de reaproveitar send_signal_alert/send_result:
+    # essa estratégia não passou pelo mesmo processo de validação por backtest das outras (não
+    # existe fonte gratuita de histórico "actual" pra testar), então a mensagem PRECISA deixar
+    # isso explícito — nunca pode ser confundida com um sinal de produção validado.
+
+    def send_experimental_signal_alert(self, signal: SignalRecord) -> None:
+        icon = "🟢" if signal.direction == "long" else "🔴"
+        direction_label = "COMPRA (long)" if signal.direction == "long" else "VENDA (short)"
+        lines = [
+            f"🧪 {icon} <b>[FOREX-NOTÍCIA] {signal.symbol} — {direction_label}</b>",
+            "",
+            f"Entrada: {signal.entry:.5f}",
+            f"Stop: {signal.stop_loss:.5f}",
+            f"Alvo: {signal.target:.5f}",
+            "",
+            f"<i>{signal.reason}</i>",
+            "",
+            _EXPERIMENTAL_DISCLAIMER,
+        ]
+        self._send("\n".join(lines))
+
+    def send_experimental_result(self, signal: SignalRecord) -> None:
+        icon, label = _RESULT_LABELS.get(signal.status, ("ℹ️", signal.status))
+        close_price = f"{signal.close_price:.5f}" if signal.close_price is not None else "?"
+        lines = [
+            f"🧪 {icon} <b>[FOREX-NOTÍCIA] {signal.symbol} — {label}</b>",
+            f"{signal.direction.upper()} · Entrada: {signal.entry:.5f} · Fechou: {close_price}",
+            "<i>(modo observação — resultado real, mas estratégia ainda não validada)</i>",
+        ]
+        self._send("\n".join(lines))

@@ -72,6 +72,39 @@ class SignalsStore:
         data["last_report_date"] = iso_date
         self._write(data)
 
+    def get_last_weekly_report_date(self) -> str | None:
+        """Mesma ideia de `get_last_report_date`, mas pro relatório semanal (toda
+        segunda-feira) — chave separada pra não colidir com o corte diário."""
+        return self._read().get("last_weekly_report_date")
+
+    def set_last_weekly_report_date(self, iso_date: str) -> None:
+        data = self._read()
+        data["last_weekly_report_date"] = iso_date
+        self._write(data)
+
+    def get_last_monthly_report_date(self) -> str | None:
+        """Mesma ideia, pro relatório mensal (todo dia 1)."""
+        return self._read().get("last_monthly_report_date")
+
+    def set_last_monthly_report_date(self, iso_date: str) -> None:
+        data = self._read()
+        data["last_monthly_report_date"] = iso_date
+        self._write(data)
+
+    def has_seen_news_event(self, key: str) -> bool:
+        """`key` identifica um par (evento econômico, símbolo) já processado por
+        `news_watch.py` — evita mandar o mesmo sinal de novo em toda execução (roda a cada
+        30min, o mesmo evento com `actual` já divulgado continuaria "válido" indefinidamente
+        sem essa marca)."""
+        return key in self._read().get("seen_news_events", [])
+
+    def mark_news_event_seen(self, key: str) -> None:
+        data = self._read()
+        seen = data.setdefault("seen_news_events", [])
+        if key not in seen:
+            seen.append(key)
+        self._write(data)
+
     def update(self, updated: list[SignalRecord]) -> None:
         """Substitui os registros pelos atualizados, casando por (symbol, opened_at) — chave
         natural já que um símbolo pode ter vários sinais ao longo do tempo."""
