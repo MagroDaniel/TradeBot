@@ -1,0 +1,33 @@
+name: Forex — Teste do modo observação de notícia (temporário)
+
+# Workflow temporário só pra validar news_watch.py de ponta a ponta contra o feed real da
+# Forex Factory + Twelve Data. Não manda nada pro Telegram (news_watch.py é só leitura).
+# Remover depois de confirmar que funciona.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: forex-daytrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Rodar modo observação
+        env:
+          TELEGRAM_BOT_TOKEN: dummy-for-watch-only
+          TELEGRAM_CHAT_ID: dummy-for-watch-only
+          TWELVEDATA_API_KEY: ${{ secrets.FOREX_TWELVEDATA_API_KEY }}
+        run: python news_watch.py
