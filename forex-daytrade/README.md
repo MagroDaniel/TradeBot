@@ -230,6 +230,42 @@ Nenhuma abordagem testada — recalibração de parâmetro, mudança de timefram
 mean reversion, ou breakout — cruzou pra expectância positiva de forma confiável. Bot continua
 fora de produção.
 
+## Quarta estratégia — notícia/surpresa de calendário econômico (2026-09-09/10)
+
+Depois do balanço acima (nenhuma das 3 abordagens de preço puro mostrou edge), o usuário pediu
+pra seguir por notícia: acompanhar calendário econômico pra ter uma base direcional (sobe/desce)
+em vez de só ler o candle. Fonte gratuita disponível (Forex Factory,
+`data/forexfactory_client.py`) só cobre a semana atual/próxima — sem valor `actual` histórico,
+então **não dá pra backtestar essa estratégia contra histórico real** (as APIs que dariam isso
+são pagas, ~US$25/mês). O usuário decidiu explicitamente (2026-09-09) seguir só com o dado
+grátis, sabendo da troca — é a única estratégia deste projeto que não passa pelo processo normal
+de validação por backtest antes de qualquer alerta (ver `analysis/news_signals.py`, docstring).
+
+Lógica implementada (`analysis/news_signals.py`): calcula a direção implícita pela SURPRESA
+(`actual` vs. `forecast`, não o nível absoluto) pra um conjunto de indicadores com direção bem
+documentada na literatura (NFP, CPI, PIB, varejo, PMI, juros, desemprego, seguro-desemprego);
+gera sinal só depois de `WAIT_MINUTES_AFTER_RELEASE`(15min) do horário de divulgação, pra filtrar
+o solavanco inicial de volatilidade.
+
+**Validação end-to-end (2026-09-10)**: rodado via workflow temporário (`news_watch.py`) contra o
+feed real da Forex Factory + Twelve Data — buscou corretamente 10 eventos de alto impacto
+(USD/EUR/GBP) da semana (decisão de juros do BCE, CPI/PPI dos EUA, PIB do Reino Unido), e
+corretamente **não gerou nenhum sinal** porque nenhum evento ainda tinha `actual` divulgado
+nesse momento (abstenção correta, não falso positivo). Confirma que o pipeline inteiro
+(`ForexFactoryClient` → parsing → filtro de impacto/moeda → espera de 15min → cálculo de
+surpresa → geração de sinal) funciona corretamente contra dado de produção. Workflow temporário
+removido depois da validação.
+
+**Decisão sobre alerta real (2026-09-10, pedido do usuário)**: em vez de esperar semanas rodando
+só em log (`news_watch.py` original, sem mandar nada), o usuário pediu pra já mandar pro Telegram
+— mas claramente marcado como "modo observação, não validado" (ver `send_experimental_signal_alert`
+em `alerts/telegram_notifier.py`), nunca como recomendação de produção de verdade. `news_watch.py`
+agora persiste (`storage/news_signals.json`, arquivo separado do `storage/signals.json` das
+estratégias de preço) e resolve o resultado de cada sinal (bateu alvo/stop/expirou), do mesmo jeito
+que as outras estratégias — assim dá pra medir expectância real com o tempo, não só comparar "à
+mão". Roda via `.github/workflows/forex_news_alert.yml` (cron nativo, não sub-horário — sem o
+problema de fila do `schedule` do GitHub Actions documentado no CLAUDE.md do cripto).
+
 ## Próximos passos (nenhum feito ainda — decisão em aberto)
 
 1. Aceitar, com o tempo e dado já investidos (4 abordagens, 2 pares, 3 janelas cada, ~40
