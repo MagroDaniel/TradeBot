@@ -571,6 +571,24 @@
       "status": "target_hit",
       "closed_at": "2026-09-09T15:20:29.561958+00:00",
       "close_price": 0.4398953093089882
+    },
+    {
+      "symbol": "THEUSDT",
+      "direction": "short",
+      "entry": 0.068,
+      "stop_loss": 0.06911338575981524,
+      "target": 0.06577322848036954,
+      "rsi_value": 39.049810411908744,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 39 (não sobrevendido)",
+      "opened_at": "2026-09-10T12:00:50.733172+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null,
+      "strategy_version": "ema9-21-rsi-htf-range-v2-closed-candle",
+      "timeframe": "15m",
+      "signal_candle_closed_at": "2026-09-10T11:59:59.999000+00:00",
+      "entry_mode": "market_after_closed_candle",
+      "market_mode": "futures"
     }
   ],
   "last_report_date": "2026-09-10"
