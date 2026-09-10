@@ -70,3 +70,7 @@ BACKTEST_SYMBOLS = tuple(
 
 # --- Armazenamento ---
 STORAGE_PATH = _get_env("STORAGE_PATH", default="storage/signals.json")
+# Arquivo separado do STORAGE_PATH acima de propósito — a estratégia de notícia
+# (news_watch.py) é experimental (não passou por backtest, ver analysis/news_signals.py) e
+# nunca deve se misturar com o histórico das estratégias de preço validadas.
+NEWS_STORAGE_PATH = _get_env("NEWS_STORAGE_PATH", default="storage/news_signals.json")

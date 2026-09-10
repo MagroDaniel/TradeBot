@@ -119,3 +119,77 @@ def test_daily_report_lists_every_record_win_and_loss(monkeypatch):
     assert "1✅" in text
     assert "1❌" in text
     assert "1⌛" in text
+
+
+def test_weekly_report_with_no_records(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+
+    TelegramNotifier("token", "chat").send_weekly_report(
+        "2026-09-01", "2026-09-07", summarize([]), []
+    )
+
+    assert "Relatório semanal" in sent["text"]
+    assert "Nenhum sinal resolvido" in sent["text"]
+
+
+def test_weekly_report_lists_every_record(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    records = [_signal(symbol="EUR/USD", status="target_hit", close_price=1.1100)]
+
+    TelegramNotifier("token", "chat").send_weekly_report(
+        "2026-09-01", "2026-09-07", summarize(records), records
+    )
+
+    assert "EUR/USD" in sent["text"] and "✅" in sent["text"]
+
+
+def test_monthly_report_with_no_records(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+
+    TelegramNotifier("token", "chat").send_monthly_report("2026-08", summarize([]), [])
+
+    assert "Relatório mensal" in sent["text"]
+    assert "2026-08" in sent["text"]
+    assert "Nenhum sinal resolvido" in sent["text"]
+
+
+def test_monthly_report_lists_every_record(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    records = [_signal(symbol="GBP/USD", status="stop_hit", close_price=1.0950)]
+
+    TelegramNotifier("token", "chat").send_monthly_report("2026-08", summarize(records), records)
+
+    assert "GBP/USD" in sent["text"] and "❌" in sent["text"]
+
+
+def test_experimental_signal_alert_marks_observation_mode_not_validated(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+
+    TelegramNotifier("token", "chat").send_experimental_signal_alert(_signal())
+
+    text = sent["text"]
+    assert "EUR/USD" in text
+    assert "OBSERVAÇÃO" in text.upper()
+    assert "não" in text.lower() and ("valida" in text.lower())
+    assert "🧪" in text
+
+
+def test_experimental_signal_alert_never_mentions_leverage(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+
+    TelegramNotifier("token", "chat").send_experimental_signal_alert(_signal())
+
+    text_lower = sent["text"].lower()
+    assert "leverage" not in text_lower
+    assert "alavancagem" not in text_lower or "nunca" in text_lower
+
+
+def test_experimental_result_marks_observation_mode(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    signal = _signal(status="target_hit", close_price=1.1100)
+
+    TelegramNotifier("token", "chat").send_experimental_result(signal)
+
+    text = sent["text"]
+    assert "✅" in text
+    assert "observação" in text.lower()

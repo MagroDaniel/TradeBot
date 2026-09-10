@@ -1,0 +1,55 @@
+name: Forex — Alerta de notícia (modo observação, experimental)
+
+# Roda a estratégia de notícia/surpresa econômica (forex-daytrade/news_watch.py) — a ÚNICA
+# estratégia deste projeto que não passou por backtest contra histórico real (não existe fonte
+# gratuita com valor "actual" histórico — ver forex-daytrade/README.md). Manda alerta real pro
+# Telegram, mas toda mensagem carrega o aviso de "modo observação, não validado" (decisão do
+# usuário, 2026-09-10, pra poder acompanhar em tempo real em vez de só olhar log).
+#
+# Cron de 1h (não mais frequente) por dois motivos: (1) o feed da Forex Factory tem rate limit
+# de 2 downloads/5min — não tem necessidade de bater mais que isso; (2) o evento `schedule` do
+# GitHub Actions não garante frequência sub-horária (medido na prática no crypto_daytrade.yml —
+# ver CLAUDE.md do cripto), então manter o cron em >=1h reduz (mas não garante zero) o risco do
+# mesmo problema aqui. Como o sinal só é marcado "visto" depois de mandado com sucesso (ver
+# news_watch.py::scan_for_news_signals), um atraso ocasional do schedule não perde o evento —
+# só atrasa a checagem. Se notar atraso grande na prática, o mesmo fix do cripto se aplica: um
+# cron externo (cron-job.org) chamando `workflow_dispatch` via API.
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  news-watch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: forex-daytrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Rodar modo observação (manda pro Telegram, marcado como experimental)
+        env:
+          # Mesmo bot/grupo do crypto-daytrade (decisão do usuário, 2026-09-09).
+          TELEGRAM_BOT_TOKEN: ${{ secrets.CRYPTO_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.CRYPTO_TELEGRAM_CHAT_ID }}
+          TWELVEDATA_API_KEY: ${{ secrets.FOREX_TWELVEDATA_API_KEY }}
+        run: python news_watch.py
+
+      - name: Salvar histórico de sinais de notícia
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add storage/news_signals.json
+          git diff --staged --quiet || git commit -m "chore: atualiza histórico de sinais de notícia (forex)"
+          git push

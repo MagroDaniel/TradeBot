@@ -30,6 +30,14 @@ _RESULT_LABELS = {
     "expired": ("⌛", "Expirado sem bater alvo ou stop"),
 }
 
+_EXPERIMENTAL_DISCLAIMER = (
+    "🧪 <i>MODO OBSERVAÇÃO — esta estratégia (notícia/surpresa econômica) ainda NÃO foi "
+    "validada por backtest contra histórico real (não existe fonte gratuita com esse dado — "
+    "ver README). Isto NÃO é uma recomendação de operação, é acompanhamento pra decidir mais "
+    "pra frente, com dado real, se vira sinal de produção. Gerencie seu próprio risco; nunca "
+    "alavancagem.</i>"
+)
+
 
 class TelegramNotifier:
     def __init__(self, bot_token: str, chat_id: str) -> None:
