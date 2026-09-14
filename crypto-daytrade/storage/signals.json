@@ -607,6 +607,24 @@
       "signal_candle_closed_at": "2026-09-12T11:29:59.999000+00:00",
       "entry_mode": "market_after_closed_candle",
       "market_mode": "futures"
+    },
+    {
+      "symbol": "XAUTUSDT",
+      "direction": "short",
+      "entry": 4286.17,
+      "stop_loss": 4297.381041246273,
+      "target": 4263.747917507455,
+      "rsi_value": 36.78750556820884,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 37 (não sobrevendido)",
+      "opened_at": "2026-09-14T20:00:49.555686+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null,
+      "strategy_version": "ema9-21-rsi-htf-range-v2-closed-candle",
+      "timeframe": "15m",
+      "signal_candle_closed_at": "2026-09-14T19:59:59.999000+00:00",
+      "entry_mode": "market_after_closed_candle",
+      "market_mode": "futures"
     }
   ],
   "last_report_date": "2026-09-14",
