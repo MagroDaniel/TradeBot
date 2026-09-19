@@ -679,6 +679,24 @@
       "signal_candle_closed_at": "2026-09-19T04:29:59.999000+00:00",
       "entry_mode": "market_after_closed_candle",
       "market_mode": "futures"
+    },
+    {
+      "symbol": "STRKUSDT",
+      "direction": "long",
+      "entry": 0.04201,
+      "stop_loss": 0.040321707306333936,
+      "target": 0.045386585387332125,
+      "rsi_value": 57.788042520601664,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 58 (não sobrecomprado)",
+      "opened_at": "2026-09-19T08:50:49.174759+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null,
+      "strategy_version": "ema9-21-rsi-htf-range-v2-closed-candle",
+      "timeframe": "15m",
+      "signal_candle_closed_at": "2026-09-19T08:44:59.999000+00:00",
+      "entry_mode": "market_after_closed_candle",
+      "market_mode": "futures"
     }
   ],
   "last_report_date": "2026-09-19",
