@@ -697,6 +697,24 @@
       "signal_candle_closed_at": "2026-09-19T08:44:59.999000+00:00",
       "entry_mode": "market_after_closed_candle",
       "market_mode": "futures"
+    },
+    {
+      "symbol": "LTCUSDT",
+      "direction": "long",
+      "entry": 58.01,
+      "stop_loss": 57.522743013814605,
+      "target": 58.984513972370785,
+      "rsi_value": 62.42048776253125,
+      "reason": "EMA9 cruzou acima da EMA21, RSI em 62 (não sobrecomprado)",
+      "opened_at": "2026-09-19T12:01:01.971500+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null,
+      "strategy_version": "ema9-21-rsi-htf-range-v2-closed-candle",
+      "timeframe": "15m",
+      "signal_candle_closed_at": "2026-09-19T11:59:59.999000+00:00",
+      "entry_mode": "market_after_closed_candle",
+      "market_mode": "futures"
     }
   ],
   "last_report_date": "2026-09-19",
