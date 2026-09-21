@@ -6,8 +6,10 @@ from storage.picks_store import Pick
 
 
 def _capture_sent_text(monkeypatch):
-    """Substitui requests.post por um stub que só guarda o texto enviado, sem rede."""
-    sent = {}
+    """Substitui requests.post por um stub que guarda o texto enviado, sem rede. `sent["text"]`
+    é sempre o texto da ÚLTIMA mensagem enviada (compat com testes que só mandam uma mensagem);
+    `sent["all_texts"]` acumula todas, na ordem — usado pelos testes de divisão em partes."""
+    sent: dict = {"all_texts": []}
 
     class _FakeResponse:
         ok = True
@@ -21,6 +23,7 @@ def _capture_sent_text(monkeypatch):
 
     def _fake_post(url, data, timeout):
         sent["text"] = data["text"]
+        sent["all_texts"].append(data["text"])
         return _FakeResponse()
 
     monkeypatch.setattr("alerts.telegram_notifier.requests.post", _fake_post)
@@ -269,3 +272,58 @@ def test_send_results_summary_no_resolved_picks(monkeypatch):
     TelegramNotifier("token", "chat").send_results_summary("2026-09-07", [])
 
     assert "Nenhum pick resolvido" in sent["text"]
+
+
+def _many_picks(n: int) -> list[Pick]:
+    """Gera `n` picks em jogos distintos — usado pra forçar mensagem grande demais pro Telegram
+    (bug real visto em produção: dia com muitos jogos/picks derrubava a execução com
+    "Bad Request: message is too long")."""
+    return [
+        _pick(
+            match=f"Time {i} A x Time {i} B",
+            home_team=f"Time {i} A",
+            away_team=f"Time {i} B",
+            event_id=f"e{i}",
+            selection="Empate",
+        )
+        for i in range(n)
+    ]
+
+
+def test_send_daily_picks_splits_into_multiple_messages_when_too_long(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = _many_picks(80)  # bem mais que cabe numa mensagem só de 4096 caracteres
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert len(sent["all_texts"]) > 1
+    for text in sent["all_texts"]:
+        assert len(text) <= 4096
+    # cada jogo aparece em alguma das mensagens, nenhum se perde na divisão
+    joined = "\n".join(sent["all_texts"])
+    for i in range(80):
+        assert f"Time {i} A x Time {i} B" in joined
+
+
+def test_send_daily_picks_single_message_when_it_fits(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = [_pick(selection="Empate")]
+
+    TelegramNotifier("token", "chat").send_daily_picks("2026-09-08", picks)
+
+    assert len(sent["all_texts"]) == 1
+    assert "parte" not in sent["all_texts"][0]  # sem prefixo de parte quando cabe numa mensagem só
+
+
+def test_send_results_summary_splits_into_multiple_messages_when_too_long(monkeypatch):
+    sent = _capture_sent_text(monkeypatch)
+    picks = _many_picks(80)
+    for p in picks:
+        p.result = "red"
+        p.profit_units = -0.03
+
+    TelegramNotifier("token", "chat").send_results_summary("2026-09-08", picks)
+
+    assert len(sent["all_texts"]) > 1
+    for text in sent["all_texts"]:
+        assert len(text) <= 4096

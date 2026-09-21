@@ -17,6 +17,15 @@ from storage.picks_store import Pick
 
 logger = logging.getLogger(__name__)
 
+# Limite real da API do Telegram é 4096 caracteres por mensagem. Usamos uma margem abaixo disso
+# porque o limite oficial é em unidades UTF-16 (emoji/acento podem contar diferente de
+# len() em Python) — sem essa margem, uma mensagem grande (dia com muitos jogos/picks) derrubava
+# a execução inteira com "Bad Request: message is too long" (bug real visto em produção entre
+# 12/09 e 20/09/2026: pelo menos 4 execuções falharam assim, perdendo o dia inteiro — sem picks
+# salvos, sem mensagem nenhuma enviada, nem resultado nem picks novos).
+_TELEGRAM_MAX_LENGTH = 4096
+_SAFE_CHUNK_LENGTH = 3500
+
 # Nome + emoji de exibição por sport_key (usado só na formatação da mensagem). Competição
 # sem entrada aqui cai no fallback genérico — não precisa atualizar isso pra SPORT_KEYS
 # funcionar, só deixa a mensagem menos bonita.
@@ -90,6 +99,36 @@ class TelegramNotifier:
         message_id = payload.get("result", {}).get("message_id")
         logger.info("Mensagem enviada ao Telegram com sucesso (message_id=%s)", message_id)
 
+    def _send_chunked(self, lines: list[str]) -> None:
+        """Manda `lines` como uma ou mais mensagens, respeitando o limite de tamanho do Telegram
+        (ver `_TELEGRAM_MAX_LENGTH`/`_SAFE_CHUNK_LENGTH` acima). Quebra só entre linhas (nunca no
+        meio de uma) — cada bloco de competição/jogo é construído como um grupo de linhas
+        consecutivas, então a quebra tende a cair entre jogos/competições, não no meio de um
+        pick. Se tudo couber numa mensagem só (caso comum), manda uma mensagem só, sem prefixo."""
+        full_text = "\n".join(lines).rstrip()
+        if len(full_text) <= _TELEGRAM_MAX_LENGTH:
+            self._send(full_text)
+            return
+
+        chunks: list[str] = []
+        current: list[str] = []
+        current_len = 0
+        for line in lines:
+            line_len = len(line) + 1  # +1 pelo "\n" que vai juntar essa linha às outras
+            if current and current_len + line_len > _SAFE_CHUNK_LENGTH:
+                chunks.append("\n".join(current).rstrip())
+                current = []
+                current_len = 0
+            current.append(line)
+            current_len += line_len
+        if current:
+            chunks.append("\n".join(current).rstrip())
+
+        total = len(chunks)
+        for i, chunk in enumerate(chunks, start=1):
+            prefix = f"<i>(parte {i}/{total})</i>\n" if total > 1 else ""
+            self._send((prefix + chunk).strip())
+
     def send_results_summary(self, date: str, picks: list[Pick]) -> None:
         display_date = format_date_br(date)
         resolved = [p for p in picks if p.result is not None]
@@ -123,7 +162,7 @@ class TelegramNotifier:
             f"💰 <b>Saldo:</b> {sign_total}{total_profit:.1%} da banca  ·  "
             f"🎯 <b>Acertos:</b> {len(greens)}/{len(resolved)}"
         )
-        self._send("\n".join(lines).rstrip())
+        self._send_chunked(lines)
 
     def send_daily_picks(
         self,
@@ -183,7 +222,7 @@ class TelegramNotifier:
             lines.append("")
             lines.extend(self._format_multiple(multiple))
 
-        self._send("\n".join(lines).rstrip())
+        self._send_chunked(lines)
 
     def _format_multiple(self, multiple: Multiple) -> list[str]:
         lines = ["━━━━━━━━━━━━━━━", "🎫 <b>Bilhete sugerido (múltipla)</b>", ""]

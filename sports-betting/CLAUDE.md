@@ -299,6 +299,16 @@ logo abaixo do horário/confronto. Mensagem de picks termina com um rodapé fixo
 o que EV significa e avisando que EV muito alto pode ser erro de modelo — reforça o aviso que já está em
 "Modelo" acima, agora visível pro usuário final também.
 
+**Divisão em partes (`_send_chunked`)**: o Telegram recusa mensagem acima de 4096 caracteres — em dias
+com muitos jogos/picks isso derrubava a execução inteira (`Bad Request: message is too long`, sem captura
+nenhuma), perdendo o dia todo (nem `storage/picks.json` era salvo, nem mensagem nenhuma chegava). Bug real
+visto em produção entre 12/09 e 20/09/2026 (pelo menos 4 execuções falharam assim). `send_daily_picks` e
+`send_results_summary` agora montam a lista de `lines` e passam pra `_send_chunked`, que manda tudo numa
+mensagem só quando cabe (comportamento antigo, sem prefixo) ou divide em várias mensagens (quebrando só
+entre linhas, nunca no meio de uma) quando não cabe, numerando "(parte i/N)". `_TELEGRAM_MAX_LENGTH`/
+`_SAFE_CHUNK_LENGTH` — a margem existe porque o limite oficial do Telegram é em unidades UTF-16, não
+necessariamente igual a `len()` em Python com emoji/acento.
+
 ### Armazenamento (`storage/picks_store.py`)
 
 JSON simples indexado por data ISO (calculada em BRT — ver acima), com listas de dataclasses `Pick`
