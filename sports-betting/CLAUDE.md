@@ -73,8 +73,8 @@ instância de `OddsAPIClient`:
 
 1. **`resolve_yesterday()`** — carrega os picks salvos de ontem (data calculada em BRT, ver
    `data/schedule.py::today_brt`) via `PicksStore`, busca os placares para os sport keys relevantes, marca
-   cada pick como `"green"`/`"red"` recalculando o resultado a partir do placar bruto (ver `_pick_won`),
-   grava os resultados de volta e envia o resumo pelo Telegram.
+   cada pick como `"green"`/`"red"` recalculando o resultado a partir do placar bruto (ver
+   `analysis/resolution.py::pick_won`), grava os resultados de volta e envia o resumo pelo Telegram.
 2. **`_load_models()`** — calibra um `PoissonModel` por competição em `SPORT_KEYS`, a partir de
    `HISTORICAL_DATA_DIR/{sport_key}.csv`. Competição sem CSV correspondente é pulada (log de aviso), não
    derruba a execução das demais — não há modelo persistido/cacheado entre execuções.
@@ -308,6 +308,26 @@ mensagem só quando cabe (comportamento antigo, sem prefixo) ou divide em vária
 entre linhas, nunca no meio de uma) quando não cabe, numerando "(parte i/N)". `_TELEGRAM_MAX_LENGTH`/
 `_SAFE_CHUNK_LENGTH` — a margem existe porque o limite oficial do Telegram é em unidades UTF-16, não
 necessariamente igual a `len()` em Python com emoji/acento.
+
+### Resolução de resultados (`analysis/resolution.py`)
+
+**Bug crítico encontrado em produção (22/09/2026), corrigido nesta sessão**: `pick_won()` (antes vivia
+em `main.py::_pick_won`) só tinha lógica de vitória/derrota pra 5 das 10 seleções possíveis (mandante
+vence, visitante vence, empate, over 2.5, under 2.5) — **BTTS ("ambas marcam"/"ambas não marcam") e as 3
+variantes de dupla chance caíam no `return False` do final por não bater com nenhum `if`, sendo marcadas
+`"red"` sempre, não importa o resultado real do jogo**. Achado analisando os primeiros ~2 semanas de picks
+reais: dupla chance 0/16, "ambas não marcam" 0/15, "ambas marcam" 0/1 — 39% de todos os picks resolvidos,
+100% marcados errado por esse bug, não por erro de previsão do modelo. Isso inflava artificialmente o
+prejuízo reportado (ROI e taxa de acerto ficavam bem piores do que a realidade).
+
+Agora `pick_won()` cobre as 10 seleções (função pura, testada em `tests/test_resolution.py`, um caso por
+seleção + casos de borda). **Os picks resolvidos ANTES desta correção com seleção de BTTS/dupla chance
+têm resultado desconhecido, não confirmadamente `"red"`** — `storage/picks.json` não guarda o placar bruto
+do jogo (só o resultado já calculado), então não dá pra reprocessar esses picks antigos sem buscar os
+placares de novo na Odds API (`/scores`, só cobre jogos recentes — `days_from` limitado). Ao analisar
+`storage/picks.json` histórico (ex: no backtest ou no check-in semanal), **separe os picks de BTTS/dupla
+chance resolvidos antes de 22/09/2026 do resto** — não são uma amostra confiável de acerto/erro do modelo
+nesses mercados.
 
 ### Armazenamento (`storage/picks_store.py`)
 
