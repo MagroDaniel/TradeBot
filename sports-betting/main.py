@@ -21,6 +21,7 @@ from alerts.telegram_notifier import TelegramNotifier
 from analysis.ev import calculate_ev, market_hold
 from analysis.kelly import cap_group_exposure, capped_stake
 from analysis.multiple import Multiple, MultipleLeg, build_multiple
+from analysis.resolution import pick_won
 from data.historical_loader import load_matches_from_csv
 from data.news_check import NewsChecker
 from data.odds_client import OddsAPIClient
@@ -53,7 +54,7 @@ def resolve_yesterday(client: OddsAPIClient, store: PicksStore, notifier: Telegr
         event = scores_by_event.get(pick.event_id)
         if not event or not event.get("completed"):
             continue
-        won = _pick_won(pick, event)
+        won = pick_won(pick, event)
         pick.result = "green" if won else "red"
         pick.profit_units = (
             pick.suggested_stake_fraction * (pick.odds - 1)
@@ -63,30 +64,6 @@ def resolve_yesterday(client: OddsAPIClient, store: PicksStore, notifier: Telegr
 
     store.update_results(yesterday, picks)
     notifier.send_results_summary(yesterday, picks)
-
-
-def _pick_won(pick: Pick, event: dict) -> bool:
-    scores = {
-        s["name"]: int(s["score"])
-        for s in event.get("scores", []) or []
-        if s.get("score") is not None
-    }
-    home_goals = scores.get(pick.home_team)
-    away_goals = scores.get(pick.away_team)
-    if home_goals is None or away_goals is None:
-        return False
-
-    if pick.selection == f"{pick.home_team} vence":
-        return home_goals > away_goals
-    if pick.selection == f"{pick.away_team} vence":
-        return away_goals > home_goals
-    if pick.selection == "Empate":
-        return home_goals == away_goals
-    if pick.selection == "Over 2.5 gols":
-        return (home_goals + away_goals) > 2
-    if pick.selection == "Under 2.5 gols":
-        return (home_goals + away_goals) <= 2
-    return False
 
 
 def _load_models(sport_keys: list[str]) -> dict[str, PoissonModel]:
