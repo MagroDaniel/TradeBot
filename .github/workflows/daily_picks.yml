@@ -1,11 +1,12 @@
 name: Daily Picks — Sports Betting Bot
 
-# (Republicado pra forçar o GitHub a reindexar o workflow.)
+# Bot desativado em 29/09/2026: apostas esportivas foram bloqueadas no Brasil (decisão do
+# usuário). O gatilho automático (schedule) foi removido de propósito — o job só roda mais
+# via workflow_dispatch manual. Pra reativar o envio diário automático, restaure o bloco
+# "schedule" abaixo:
+# schedule:
+#   - cron: "0 10 * * *"  # 10:00 UTC = 07:00 BRT (UTC-3, fixo)
 on:
-  schedule:
-    # 10:00 UTC = 07:00 BRT (UTC-3, fixo — Brasil não observa horário de verão). Ajuste se
-    # estiver em outro fuso.
-    - cron: "0 10 * * *"
   workflow_dispatch: {}
 
 permissions:
