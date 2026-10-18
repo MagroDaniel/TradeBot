@@ -895,6 +895,24 @@
       "signal_candle_closed_at": "2026-10-17T21:44:59.999000+00:00",
       "entry_mode": "market_after_closed_candle",
       "market_mode": "futures"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "direction": "short",
+      "entry": 0.07924,
+      "stop_loss": 0.07977674347131694,
+      "target": 0.07816651305736613,
+      "rsi_value": 46.253006096499625,
+      "reason": "EMA9 cruzou abaixo da EMA21, RSI em 46 (não sobrevendido)",
+      "opened_at": "2026-10-18T02:20:34.822358+00:00",
+      "status": "open",
+      "closed_at": null,
+      "close_price": null,
+      "strategy_version": "ema9-21-rsi-htf-range-v2-closed-candle",
+      "timeframe": "15m",
+      "signal_candle_closed_at": "2026-10-18T02:14:59.999000+00:00",
+      "entry_mode": "market_after_closed_candle",
+      "market_mode": "futures"
     }
   ],
   "last_report_date": "2026-10-17",
