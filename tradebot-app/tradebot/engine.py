@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import replace
 from pathlib import Path
 
 from tradebot import risk
@@ -38,6 +39,7 @@ EXIT_REASON_LABELS = {
     "stop_loss": "stop", "trailing_stop": "trailing stop", "take_profit": "alvo", "time_limit": "tempo-limite",
     "strategy_exit": "saída da estratégia", "manual": "manual", "emergency": "PARAR TUDO",
     "leader_exit": "o trader copiado fechou",
+    "leader_reduce": "o trader copiado reduziu",
 }
 CANDLE_SETTLE_MS = 5_000  # espera a Binance consolidar o candle recém-fechado
 EQUITY_SNAPSHOT_MS = 5 * 60_000
@@ -489,6 +491,8 @@ class Engine:
             lp = leader.positions.get(coin)
             if lp is None or lp.direction != p.direction:
                 self._close(bot, p, "leader_exit", now)
+            elif params["follow_size_changes"]:
+                self._follow_size(bot, market, p, lp, params, now)
 
         # 2) linha de base: o que ele já tinha quando o robô ligou não é copiado
         if bot.copy_baseline is None:
@@ -527,9 +531,90 @@ class Engine:
                             f"{lp.notional / leader.account_value:.0%} da carteira dele)" if leader.account_value else
                             f"Copiou {short}: {lp.direction} {coin}", "copy_wallet")
             self._try_open(bot, market, signal, self.store.open_positions(self.account, bot.id, market), now,
-                           target_notional=target, extra={"coin": coin, "leader": address.lower()})
+                           target_notional=target, extra={"coin": coin, "leader": address.lower(), "leader_size": lp.size})
             if not any(p.extra.get("coin") == coin for p in self.store.open_positions(self.account, bot.id, market)):
                 bot.copy_baseline.add(coin)  # negada (limite/tamanho): não insiste a cada ciclo
+
+    def _follow_size(self, bot: Bot, market: str, p: Position, lp, params: dict, now: int) -> None:
+        """Trader mudou o tamanho da posição → muda o nosso na mesma proporção.
+
+        `extra["leader_size"]` guarda o tamanho dele (em moedas) na última vez que acompanhamos.
+        Mudança abaixo de `min_change_pct` é ignorada (sem atualizar a referência, então ajustes
+        pequenos seguidos se acumulam até passar do limite)."""
+        ref = p.extra.get("leader_size")
+        if not ref:  # posição de antes desta função existir: só passa a acompanhar daqui pra frente
+            p.extra["leader_size"] = lp.size
+            self.store.update_position(p)
+            return
+        ratio = lp.size / ref
+        if abs(ratio - 1) * 100 < params["min_change_pct"]:
+            return
+        price = self.last_prices[market].get(p.symbol)
+        if not price:
+            return
+        rules = self.data[market].symbol_rules(p.symbol)
+        pct = f"{(ratio - 1) * 100:+.0f}%"
+        if ratio < 1:
+            qty = rules.round_qty(p.qty * (1 - ratio))
+            if qty <= 0:
+                return  # pequeno demais pra executar: espera acumular
+            p.extra["leader_size"] = lp.size
+            remaining = p.qty - qty
+            if remaining < rules.min_qty or remaining * price < rules.min_notional:
+                self.store.update_position(p)
+                self.store.log_event("copy", f"Trader reduziu {pct}: o que sobraria fica abaixo do mínimo, fechando tudo",
+                                     bot_id=bot.id, market=market, symbol=p.symbol)
+                self._close(bot, p, "leader_reduce", now)
+            else:
+                self._partial_close(bot, p, qty, "leader_reduce", now)
+            return
+
+        # aumento: mesmos tetos de uma entrada nova (tamanho máximo, caixa, slippage, kill switch)
+        p.extra["leader_size"] = lp.size  # mesmo se não der pra acompanhar, não insiste a cada ciclo
+        self.store.update_position(p)
+        recent_closed = self.store.closed_positions(self.account, bot.id, market, since_ms=now - 24 * 3600_000)
+        if self._entries_blocked(bot, market, recent_closed, now):
+            return
+        broker = bot.brokers[market]
+        cap_notional = bot.equity(market) * bot.config.risk.max_position_pct / 100 - p.qty * price
+        want = p.qty * (ratio - 1)
+        qty = rules.round_qty(max(0.0, min(want, cap_notional / price, broker.cash() * 0.98 / price)))
+        if qty < rules.min_qty or qty * price < rules.min_notional:
+            self.store.log_event("denied", f"Trader aumentou {pct}, mas o acréscimo fica abaixo do mínimo ou do "
+                                 "tamanho máximo da posição", bot_id=bot.id, market=market, symbol=p.symbol)
+            return
+        try:
+            fill = broker.open(p.symbol, p.direction, qty, price)
+        except OrderRejected as exc:
+            self.store.log_event("denied", f"Aumento recusado: {exc}", bot_id=bot.id, market=market, symbol=p.symbol)
+            return
+        total = p.qty + fill.qty
+        p.entry_price = (p.entry_price * p.qty + fill.price * fill.qty) / total
+        p.qty = total
+        p.entry_fee += fill.fee
+        sign = 1 if p.direction == LONG else -1
+        p.stop_loss = p.initial_stop = p.entry_price * (1 - sign * params["stop_pct"] / 100)
+        self.store.update_position(p)
+        self.store.log_event("open", f"Trader aumentou {pct}: adicionou {fill.qty:g} @ {fill.price:.6g} "
+                             f"(médio {p.entry_price:.6g}, stop {p.stop_loss:.6g})",
+                             bot_id=bot.id, market=market, symbol=p.symbol, data={"position_id": p.id})
+
+    def _partial_close(self, bot: Bot, p: Position, qty: float, reason: str, now: int) -> None:
+        """Fecha `qty` da posição como uma linha própria no histórico (resultado e R daquela
+        parte); a posição aberta continua com o resto e a taxa de entrada proporcional."""
+        share = qty / p.qty
+        part = replace(p, id=None, qty=qty, entry_fee=p.entry_fee * share,
+                       extra={**p.extra, "partial_of": p.id})
+        self.store.insert_position(self.account, bot.id, part)
+        p.qty -= qty
+        p.entry_fee -= part.entry_fee
+        self.store.update_position(p)
+        if not self._close(bot, part, reason, now):
+            # não conseguiu fechar: devolve a parte pra posição original
+            p.qty += qty
+            p.entry_fee += part.entry_fee
+            self.store.update_position(p)
+            self.store.delete_position(part.id)
 
     def _log_error(self, key: str, message: str, now: int, bot_id: int | None = None) -> None:
         """Sem internet o mesmo erro se repetiria a cada ciclo — registra 1x a cada 5 min."""

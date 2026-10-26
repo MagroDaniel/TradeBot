@@ -36,8 +36,8 @@ Freqtrade, Jesse, OctoBot e Nautilus Trader.
       estratégia, parâmetros e carteira demo próprios; visão geral comparando todos.
 - [x] **Copy trading** (pedido em 2026-10-26): robô "Copiar carteira" seguindo traders da
       Hyperliquid (posições públicas on-chain), com ranking e análise de carteira no painel.
-      Executa nos futuros da Binance a 1x, com stop próprio. Pendente: copiar aumentos e
-      reduções parciais; medir o atraso real da cópia na demo.
+      Executa nos futuros da Binance a 1x, com stop próprio. Acompanha aumentos e reduções
+      parciais do trader. Pendente: medir o atraso real da cópia na demo.
 - [~] **Fase 4 antecipada (pesquisa)**:
   - [x] backtester genérico com as mesmas regras de saída do motor;
   - [x] 4 estratégias candidatas;

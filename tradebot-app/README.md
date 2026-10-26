@@ -77,6 +77,9 @@ De lá você cria um robô **Copiar carteira**. Ele aparece como qualquer outro 
 carteira demo, comparação na Visão geral) e:
 - quando o trader **abre** uma moeda nova, abre a mesma direção nos futuros da Binance;
 - quando o trader **fecha ou inverte**, fecha (e abre o lado novo, se ele inverteu);
+- quando o trader **aumenta ou reduz** a posição em mais de 10% (ajustável), faz o mesmo na
+  mesma proporção. Cada redução vira uma linha própria no histórico, com o resultado daquela
+  parte; o aumento recalcula o preço médio e o stop e respeita o tamanho máximo da posição;
 - **não copia** o que ele já tinha aberto quando você ligou o robô (opcional nas
   configurações);
 - usa a **fatia da carteira dele, sem a alavancagem dele**: se ele está a 5x, tudo é reduzido
@@ -86,8 +89,8 @@ carteira demo, comparação na Visão geral) e:
 - se a Hyperliquid não responder, **não fecha nada**: mantém as posições com o stop próprio;
 - passa pelo mesmo portão de risco dos outros robôs (limites, proteções, PARAR TUDO).
 
-Aumentos e reduções parciais do trader ainda não são copiados, só aberturas e fechamentos.
-Moedas sem par nos futuros da Binance são puladas (e avisadas no log).
+Moedas sem par nos futuros da Binance são puladas (e avisadas no log). Reduções parciais
+contam como operações separadas no histórico e nas estatísticas do robô.
 
 ## Como o bot decide e se protege
 
@@ -154,5 +157,5 @@ mesmas regras de saída do bot ao vivo e entra na abertura do candle seguinte ao
 pytest
 ```
 
-São 97 testes, sem rede e sem credenciais. Um deles confere que a `ema_cross` gera
+São 103 testes, sem rede e sem credenciais. Um deles confere que a `ema_cross` gera
 **exatamente** os mesmos sinais que a estratégia de produção do `crypto-daytrade`.

@@ -83,7 +83,12 @@ pytest                             # sem rede, sem credenciais
     ele já tinha ao ligar, as que saíram pelo stop, as que tiveram entrada negada);
   - tamanho: `equity × copy_pct × notional_dele / max(exposição_dele, patrimônio_dele)`, com o
     teto `max_position_pct` → nunca passa de 1x;
-  - `Position.extra = {"coin", "leader"}` liga a posição à moeda dele;
+  - `Position.extra = {"coin", "leader", "leader_size"}` liga a posição à moeda dele;
+  - `_follow_size`: mudança no tamanho dele ≥ `min_change_pct` desde `leader_size` → reduz
+    (`_partial_close`: vira uma linha fechada própria, `exit_reason="leader_reduce"`,
+    `extra.partial_of`, taxa de entrada rateada) ou aumenta (preço médio + stop recalculados,
+    mesmos tetos de entrada). Mudança pequena não atualiza a referência, então acumula.
+    Invariante testado: caixa final = saldo inicial + soma do `net_pnl` do histórico;
   - estado do trader com cache por ciclo (vários robôs na mesma carteira = 1 chamada).
   - `research.py` ignora estratégias `kind="copy"`.
 - `store.py`: SQLite (WAL) com `kv`, `wallets`, `positions`, `events` (auditoria) e `equity`.

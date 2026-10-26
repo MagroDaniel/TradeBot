@@ -237,3 +237,91 @@ def test_panel_copy_flow(setup):
     empty = engine.create_bot(BotConfig.from_dict({"strategy": "copy_wallet", "markets": {"spot": {"enabled": False}}}))
     r = client.post(f"/api/bots/{empty}/start")
     assert r.status_code == 409 and "carteira" in r.headers["HX-Trigger"]
+
+
+# --- aumentos e reduções do trader ---
+def _open_btc(setup, notional=1_000):
+    engine, hl, md, store, bot_id = setup
+    engine.start(bot_id)
+    engine.tick(T0)
+    hl.set("BTC", "long", notional)
+    engine.tick(T0 + 10_000)
+    [p] = store.open_positions("paper", bot_id)
+    return p
+
+
+def test_leader_reduction_closes_same_fraction_as_own_history_row(setup):
+    engine, hl, md, store, bot_id = setup
+    p = _open_btc(setup)
+    md.prices["BTCUSDT"] = 110.0
+    hl.set("BTC", "long", 500)  # reduziu pela metade
+    engine.tick(T0 + 20_000)
+    [still] = store.open_positions("paper", bot_id)
+    [part] = store.closed_positions("paper", bot_id)
+    assert still.qty == pytest.approx(p.qty / 2, rel=0.01)
+    assert part.qty == pytest.approx(p.qty / 2, rel=0.01)
+    assert part.exit_reason == "leader_reduce" and part.extra["partial_of"] == p.id
+    assert part.net_pnl() > 0  # vendeu a parte com lucro
+    assert still.entry_fee + part.entry_fee == pytest.approx(p.entry_fee)
+
+
+def test_leader_increase_adds_and_recomputes_average_and_stop(setup):
+    engine, hl, md, store, bot_id = setup
+    p = _open_btc(setup)
+    md.prices["BTCUSDT"] = 120.0
+    hl.set("BTC", "long", 1_500)  # +50%
+    engine.tick(T0 + 20_000)
+    [q] = store.open_positions("paper", bot_id)
+    assert q.qty == pytest.approx(p.qty * 1.5, rel=0.01)
+    expected_avg = (100 * p.qty + 120 * (q.qty - p.qty)) / q.qty
+    assert q.entry_price == pytest.approx(expected_avg, rel=0.001)
+    assert q.stop_loss == pytest.approx(q.entry_price * 0.95)
+
+
+def test_small_changes_ignored_but_accumulate(setup):
+    engine, hl, md, store, bot_id = setup
+    p = _open_btc(setup)
+    hl.set("BTC", "long", 950)  # -5%: abaixo dos 10%
+    engine.tick(T0 + 20_000)
+    assert store.open_positions("paper", bot_id)[0].qty == pytest.approx(p.qty)
+    hl.set("BTC", "long", 880)  # -12% acumulado desde a referência
+    engine.tick(T0 + 30_000)
+    assert store.open_positions("paper", bot_id)[0].qty == pytest.approx(p.qty * 0.88, rel=0.02)
+
+
+def test_reduction_leaving_dust_closes_everything(setup):
+    engine, hl, md, store, bot_id = setup
+    _open_btc(setup, notional=1_000)
+    hl.set("BTC", "long", 10)  # sobraria ~1 USDT, abaixo do mínimo de 5
+    engine.tick(T0 + 20_000)
+    assert store.open_positions("paper", bot_id) == []
+    assert store.closed_positions("paper", bot_id)[0].exit_reason == "leader_reduce"
+
+
+def test_follow_size_can_be_disabled(setup):
+    engine, hl, md, store, bot_id = setup
+    cfg = engine.bots[bot_id].config
+    cfg.strategy_params["follow_size_changes"] = False
+    engine.update_bot(bot_id, cfg)
+    p = _open_btc(setup)
+    hl.set("BTC", "long", 400)
+    engine.tick(T0 + 20_000)
+    assert store.open_positions("paper", bot_id)[0].qty == pytest.approx(p.qty)
+
+
+def test_cash_matches_history_after_adds_reductions_and_close(setup):
+    engine, hl, md, store, bot_id = setup
+    _open_btc(setup)
+    steps = [(104, 1_600), (102, 800), (103, 1_200), (105, 300), (104, None)]  # sem bater o stop de 5%
+    for k, (price, size) in enumerate(steps):
+        md.prices["BTCUSDT"] = price
+        if size is None:
+            del hl.positions["BTC"]
+        else:
+            hl.set("BTC", "long", size)
+        engine.tick(T0 + 20_000 + k * 10_000)
+    assert store.open_positions("paper", bot_id) == []
+    closed = store.closed_positions("paper", bot_id)
+    assert len(closed) >= 3
+    cash = engine.bots[bot_id].brokers["futures"].cash()
+    assert cash == pytest.approx(1000 + sum(p.net_pnl() for p in closed), abs=1e-6)

@@ -38,7 +38,7 @@ MARKET_LABELS = {"spot": "Spot", "futures": "Futuros"}
 STATE_LABELS = {"running": "Ligado", "paused": "Só gerenciando posições", "stopped": "Desligado"}
 EXIT_LABELS = {
     "stop_loss": "Stop", "trailing_stop": "Trailing", "take_profit": "Alvo", "time_limit": "Tempo",
-    "strategy_exit": "Estratégia", "manual": "Manual", "emergency": "Emergência", "leader_exit": "Trader saiu",
+    "strategy_exit": "Estratégia", "manual": "Manual", "emergency": "Emergência", "leader_exit": "Trader saiu", "leader_reduce": "Trader reduziu",
 }
 # Estratégias aprovadas na pesquisa (R líquido > 0 em todas as fatias, p < 0,10). Vazio desde a
 # pesquisa de 2026-10-26 (12 meses, custos reais): nenhuma passou, nem a ema_cross — ver PLANO.md.

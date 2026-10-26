@@ -181,6 +181,9 @@ class Store:
             params += (market,)
         return [self._row_to_position(r) for r in self._exec(sql + " ORDER BY id", params).fetchall()]
 
+    def delete_position(self, position_id: int) -> None:
+        self._exec("DELETE FROM positions WHERE id = ?", (position_id,))
+
     def get_position(self, position_id: int) -> Position | None:
         row = self._exec("SELECT * FROM positions WHERE id = ?", (position_id,)).fetchone()
         return self._row_to_position(row) if row else None
