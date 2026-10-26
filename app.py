@@ -111,28 +111,49 @@ def _run_tray(url: str, quit_app, holder: dict) -> bool:
 
 def self_test() -> int:
     """Sobe o app numa pasta temporária, confere /health e a página principal (templates e
-    arquivos estáticos dentro do .exe) e sai. Sem rede externa: o motor fica desligado."""
-    with tempfile.TemporaryDirectory() as tmp:
+    arquivos estáticos dentro do .exe) e sai. Sem rede externa: o motor fica desligado.
+
+    Nunca deixa exceção escapar: no .exe sem console, uma exceção não tratada abre uma janela
+    de erro esperando clique — no build da release isso travaria o workflow."""
+    try:
+        ok, detail = _self_test()
+    except BaseException as exc:  # noqa: BLE001
+        ok, detail = False, repr(exc)
+    message = f"self-test {'OK' if ok else 'FALHOU'} (v{__version__}){': ' + detail if detail else ''}"
+    if sys.stdout is not None:  # o .exe sem console não tem stdout
+        print(message)
+    log = os.getenv("TRADEBOT_SELFTEST_LOG")  # o workflow da release lê daqui
+    if log:
+        Path(log).write_text(message, encoding="utf-8")
+    return 0 if ok else 1
+
+
+def _self_test() -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         folder = Path(tmp)
-        engine = Engine(Store(folder / "t.db"), folder)
+        store = Store(folder / "t.db")
+        engine = Engine(store, folder)
         token = secrets.token_urlsafe(16)
         port = _free_port()
         server = uvicorn.Server(uvicorn.Config(create_app(engine, token), host="127.0.0.1", port=port,
                                                log_config=None, log_level="warning"))
         thread = threading.Thread(target=server.run, daemon=True)
         thread.start()
-        ok = _wait_healthy(port)
-        if ok:
+        ok, detail = _wait_healthy(port), ""
+        if not ok:
+            detail = "o servidor não respondeu em /health"
+        else:
             s = requests.Session()
             s.trust_env = False
             page = s.get(f"http://127.0.0.1:{port}/?token={token}", timeout=10)
             css = s.get(f"http://127.0.0.1:{port}/static/vendor/htmx-1.9.12.min.js", timeout=10)
             ok = page.ok and "TradeBot" in page.text and css.ok
+            if not ok:
+                detail = f"painel HTTP {page.status_code}, js HTTP {css.status_code}"
         server.should_exit = True
         thread.join(timeout=10)
-        if sys.stdout is not None:  # o .exe sem console não tem stdout: vale o código de saída
-            print(f"self-test {'OK' if ok else 'FALHOU'} (v{__version__})")
-        return 0 if ok else 1
+        store.close()  # no Windows, arquivo aberto impede apagar a pasta temporária
+        return ok, detail
 
 
 def main() -> int:

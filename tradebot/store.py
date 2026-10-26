@@ -90,6 +90,10 @@ class Store:
             ALTER TABLE equity ADD COLUMN bot_id INTEGER NOT NULL DEFAULT 1;
         """)
 
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
     def _exec(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
             return self._conn.execute(sql, params)

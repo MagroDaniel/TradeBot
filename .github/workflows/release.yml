@@ -48,9 +48,16 @@ jobs:
         run: pyinstaller --noconfirm TradeBot.spec
 
       - name: Autoteste do executável
+        timeout-minutes: 5
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath dist\TradeBot.exe -ArgumentList "--self-test" -Wait -PassThru
+          $env:TRADEBOT_SELFTEST_LOG = "$PWD\selftest.log"
+          $p = Start-Process -FilePath dist\TradeBot.exe -ArgumentList "--self-test" -PassThru
+          if (-not $p.WaitForExit(120000)) {
+            Stop-Process -Id $p.Id -Force
+            Write-Error "self-test travou (mais de 2 minutos)"; exit 1
+          }
+          if (Test-Path selftest.log) { Get-Content selftest.log }
           if ($p.ExitCode -ne 0) { Write-Error "self-test falhou ($($p.ExitCode))"; exit 1 }
 
       - name: SHA-256
