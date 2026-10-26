@@ -40,7 +40,9 @@ EXIT_LABELS = {
     "stop_loss": "Stop", "trailing_stop": "Trailing", "take_profit": "Alvo", "time_limit": "Tempo",
     "strategy_exit": "Estratégia", "manual": "Manual", "emergency": "Emergência",
 }
-VALIDATED_STRATEGIES = {"ema_cross"}  # passaram na pesquisa; as demais aparecem como "em teste"
+# Estratégias aprovadas na pesquisa (R líquido > 0 em todas as fatias, p < 0,10). Vazio desde a
+# pesquisa de 2026-10-26 (12 meses, custos reais): nenhuma passou, nem a ema_cross — ver PLANO.md.
+VALIDATED_STRATEGIES: set[str] = set()
 
 
 def _fmt_time(ms: int | None) -> str:

@@ -39,8 +39,7 @@ Freqtrade, Jesse, OctoBot e Nautilus Trader.
   - [x] 4 estratégias candidatas;
   - [x] bootstrap e fatias de consistência;
   - [x] download de `data.binance.vision`;
-  - [ ] **rodar contra dados reais**. Não foi possível no ambiente de desenvolvimento (a rede
-        bloqueia a Binance). Precisa rodar no seu PC ou liberar o domínio.
+  - [x] rodar contra dados reais (12 meses): **nenhuma aprovada**, ver seção abaixo.
   - [ ] backtest pelo painel.
 - [ ] **Fase 3 (Binance Demo Mode)**: broker que manda ordens de verdade para a conta demo
       oficial (`demo-api.binance.com` no spot, testnet/demo de futuros). Inclui:
@@ -131,6 +130,49 @@ As candidatas abaixo atacam o que **ainda não foi testado**:
 3. Variar 1–2 parâmetros em torno do default. Se só um valor exato funciona, é overfitting.
 4. As aprovadas vão para **semanas de conta demo** ao lado da `ema_cross`, comparando o
    resultado real com o backtest do mesmo período.
+
+## Resultado da pesquisa (2026-10-26): nenhuma aprovada
+
+`python -m tradebot.research --source archive --months 12 --market futures --market spot`.
+Período: out/2025 a set/2026. 15 pares líquidos fixos. Custos por lado: futuros 0,05% de taxa
++ 0,02% de slippage; spot 0,10% + 0,02%.
+
+| estratégia | mercado | trades | acerto | R bruto | R líquido | R por fatia (líq.) | p |
+|---|---|---|---|---|---|---|---|
+| ema_cross (produção) | futuros | 86 | 43% | **+0,22** | −0,01 | −0,17 / −0,26 / +0,37 | 0,53 |
+| ema_cross (produção) | spot | 54 | 44% | **+0,29** | −0,14 | −0,35 / −0,17 / −0,00 | 0,73 |
+| donchian_breakout | futuros | 1103 | 33% | −0,04 | −0,11 | −0,22 / −0,05 / −0,08 | 0,99 |
+| donchian_breakout | spot | 617 | 31% | +0,03 | −0,14 | −0,35 / +0,02 / −0,12 | 0,98 |
+| supertrend | futuros | 1441 | 29% | +0,03 | −0,07 | −0,07 / −0,05 / −0,10 | 0,95 |
+| supertrend | spot | 805 | 26% | +0,03 | −0,18 | −0,27 / −0,14 / −0,12 | 1,00 |
+| bollinger_reversion | futuros | 1239 | 31% | −0,13 | −0,35 | −0,38 / −0,31 / −0,35 | 1,00 |
+| bollinger_reversion | spot | 569 | 29% | −0,17 | −0,58 | −0,61 / −0,60 / −0,53 | 1,00 |
+| session_momentum | futuros | 1105 | 35% | −0,12 | −0,19 | −0,30 / −0,13 / −0,11 | 1,00 |
+| session_momentum | spot | 598 | 35% | −0,05 | −0,19 | −0,37 / −0,05 / −0,11 | 1,00 |
+
+**Leitura:**
+- **A `ema_cross` é a única com vantagem antes do custo** (+0,22R / +0,29R por trade). O
+  problema é o custo: com o stop curto do 15m (1,5× ATR), taxa + slippage custam ~0,22R por
+  trade em futuros e ~0,43R no spot, e engolem a vantagem. A revalidação antiga do
+  crypto-daytrade (+0,24R líquido) usava 25 pares (o top de hoje aplicado ao passado), taxa de
+  0,04% e outro período.
+- **Mais tempo de gráfico não resolve**: em 30m/2h e 1h/4h, o filtro de range deixa poucos
+  sinais (29 e 16 em futuros) e o resultado bruto também fica negativo.
+- **Donchian, Supertrend e momentum de sessão** não têm vantagem nem antes do custo. Isso
+  contraria o que a literatura sugeria para este período e universo.
+- **Bollinger lateral** é claramente perdedora: em cripto, "comprar a queda" no 15m com ADX
+  baixo pega mais faca caindo do que reversão.
+
+**Próximos testes que fazem sentido (atacam o custo, onde está o problema):**
+1. **Entrada com ordem limitada (maker)**: em futuros a taxa maker é 0,02% contra 0,05% de
+   taker, e não há slippage na entrada. Isso corta ~40% do custo da `ema_cross`, mas exige
+   simular ordem que pode não ser executada (sem fill = sem trade).
+2. **Desconto de taxa com BNB / nível VIP**: só muda o número, não a estratégia. Vale medir
+   com a taxa real da sua conta.
+3. **Janela maior (24 meses) e 25 pares**, para ver se a vantagem bruta da `ema_cross` se
+   mantém ou foi do período.
+4. Só depois disso voltar a mexer em sinal. Regra mantida: nada vira "validada" sem R líquido
+   positivo em todas as fatias.
 
 ## Ideias aproveitadas de cada repositório
 

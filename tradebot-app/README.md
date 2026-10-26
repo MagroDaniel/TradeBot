@@ -89,13 +89,13 @@ fechamento, proteção ativada.
 
 | Estratégia | Ideia | Status |
 |---|---|---|
-| `ema_cross` | EMA 9/21 + RSI + tendência do 1h + filtro de range (a do crypto-daytrade) | **Validada** em backtest (3 janelas, R líquido positivo) |
-| `donchian_breakout` | Rompimento de canal + trailing, sem alvo fixo (tendência) | Candidata, falta rodar a pesquisa |
-| `supertrend` | Virada do Supertrend com o 1h a favor | Candidata |
-| `bollinger_reversion` | Reversão à média em mercado lateral (ADX baixo) | Candidata |
-| `session_momentum` | Momentum intradiário de BTC/ETH (estudo acadêmico) | Candidata |
+| `ema_cross` | EMA 9/21 + RSI + tendência do 1h + filtro de range (a do crypto-daytrade) | Reprovada em 2026-10 (vantagem antes das taxas, mas o custo consome tudo) |
+| `donchian_breakout` | Rompimento de canal + trailing, sem alvo fixo (tendência) | Reprovada |
+| `supertrend` | Virada do Supertrend com o 1h a favor | Reprovada |
+| `bollinger_reversion` | Reversão à média em mercado lateral (ADX baixo) | Reprovada (a pior) |
+| `session_momentum` | Momentum intradiário de BTC/ETH (estudo acadêmico) | Reprovada |
 
-O porquê de cada uma e as fontes estão em [PLANO.md](PLANO.md#pesquisa-de-estratégias).
+**Nenhuma estratégia tem vantagem comprovada hoje.** Na pesquisa de 2026-10-26 (12 meses, 15 pares, spot e futuros, com taxas e slippage) todas ficaram negativas. Use os robôs para experimentar na conta demo, não como fonte de lucro. Números, causas e próximos testes em [PLANO.md](PLANO.md#resultado-da-pesquisa-2026-10-26-nenhuma-aprovada).
 
 ## Pesquisa de estratégias (backtest)
 

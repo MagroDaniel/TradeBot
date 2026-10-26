@@ -49,7 +49,7 @@ class ProtectionSettings:
 
 @dataclass
 class BotConfig:
-    name: str = "EMA 9/21 (produção)"
+    name: str = "EMA 9/21"
     strategy: str = DEFAULT_STRATEGY
     strategy_params: dict[str, Any] = field(default_factory=dict)  # só os da estratégia deste robô
     markets: dict[str, MarketSettings] = field(default_factory=lambda: {

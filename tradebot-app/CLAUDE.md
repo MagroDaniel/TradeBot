@@ -12,7 +12,9 @@ Visão de uso em `README.md`; fases, decisões e pesquisa de estratégias em `PL
 - **Conta demo primeiro.** Hoje só existe `account="paper"`. Tudo no banco é separado por
   `account`, para paper, demo e live nunca se misturarem.
 - **Estratégia nova só entra em uso depois de `python -m tradebot.research`** com R positivo
-  em todas as fatias. Só `ema_cross` está validada (herdada do crypto-daytrade).
+  em todas as fatias. **Nenhuma está validada** desde a pesquisa de 2026-10-26 (todas negativas
+  em 12 meses com custo real, inclusive `ema_cross`) — ver PLANO.md. `VALIDATED_STRATEGIES` no
+  server.py é o selo exibido no painel; só adicione lá o que passar na pesquisa.
 - **Sistema próprio**, sem copiar código GPL (Freqtrade/OctoBot); só ideias.
 - **Vários robôs** (pedido do usuário): cada robô = 1 estratégia fixa + config + carteira demo
   própria (`bot_id` em wallets/positions/equity/events). Robôs não dividem saldo nem limite de

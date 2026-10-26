@@ -15,7 +15,7 @@ from tradebot.strategies.base import TIMEFRAMES, Param, Strategy
 
 class EmaCrossStrategy(Strategy):
     name = "ema_cross"
-    label = "Cruzamento EMA 9/21 + RSI (produção atual)"
+    label = "Cruzamento EMA 9/21 + RSI (a do bot de alertas)"
     description = (
         "EMA rápida cruza a lenta, RSI fora dos extremos, tendência do timeframe maior a favor "
         "e mercado fora de range apertado. Stop por ATR, alvo fixo em R."
