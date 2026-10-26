@@ -1,0 +1,62 @@
+<div class="status-bar card">
+  <div class="status-main">
+    <span class="dot {{ state }}"></span>
+    <div>
+      <div class="status-title">{{ STATE_LABELS[state] }}</div>
+      <div class="muted small">{{ strategy }} · último ciclo {{ last_tick | time }}</div>
+    </div>
+  </div>
+  <div class="controls">
+    {% if state != "running" %}
+      <button class="btn primary" hx-post="/api/start">▶ Ligar</button>
+    {% endif %}
+    {% if state == "running" %}
+      <button class="btn" hx-post="/api/pause" title="Continua cuidando das posições abertas (stop, alvo, trailing), mas não abre novas">⏸ Parar novas entradas</button>
+    {% endif %}
+    {% if state != "stopped" %}
+      <button class="btn" hx-post="/api/stop"
+        {% if has_open %}hx-confirm="Há posições abertas. Desligado, o bot NÃO vai gerenciar stop/alvo delas. Prefira 'Parar novas entradas'. Desligar mesmo assim?"{% endif %}>■ Desligar</button>
+    {% endif %}
+    <button class="btn danger" hx-post="/api/emergency" hx-confirm="Fechar TODAS as posições a mercado e bloquear novas entradas?">⛔ PARAR TUDO</button>
+  </div>
+</div>
+
+{% if halted %}
+<div class="alert danger">
+  Kill switch acionado: nenhuma entrada nova será feita até liberar.
+  <button class="btn small" hx-post="/api/release-halt" hx-confirm="Liberar o kill switch?">Liberar</button>
+</div>
+{% endif %}
+{% if stale %}
+<div class="alert warn">O motor não completa um ciclo há algum tempo — verifique a internet. Último erro: {{ last_error or "—" }}</div>
+{% elif last_error %}
+<div class="alert muted small">Último erro: {{ last_error }}</div>
+{% endif %}
+{% if state == "stopped" and has_open %}
+<div class="alert warn">Bot desligado com posições abertas: stop, alvo e trailing NÃO estão sendo monitorados.</div>
+{% endif %}
+
+<div class="market-cards">
+{% for m in markets %}
+  <div class="card market {{ 'disabled' if not m.enabled }}">
+    <div class="card-head">
+      <h3>{{ MARKET_LABELS[m.market] }}</h3>
+      {% if not m.enabled %}<span class="badge">desabilitado</span>{% endif %}
+    </div>
+    <div class="kpis">
+      <div><span class="label">Patrimônio</span><span class="value">{{ "%.2f"|format(m.equity) }}</span><span class="unit">USDT</span></div>
+      <div><span class="label">Retorno</span><span class="value {{ 'pos' if m.return_pct >= 0 else 'neg' }}">{{ "%+.2f"|format(m.return_pct) }}%</span></div>
+      <div><span class="label">Hoje (realizado)</span><span class="value {{ 'pos' if m.today_pnl >= 0 else 'neg' }}">{{ "%+.2f"|format(m.today_pnl) }}</span></div>
+      <div><span class="label">Operações</span><span class="value">{{ m.trades }}</span>
+        <span class="unit">{% if m.win_rate is not none %}{{ "%.0f"|format(m.win_rate) }}% acerto · {{ "%+.2f"|format(m.avg_r) }}R méd.{% endif %}</span></div>
+    </div>
+    {% if m.protection %}
+      <div class="alert warn small">🛡 {{ m.protection }}
+        {% if "Drawdown" in m.protection %}<button class="btn small" hx-post="/api/protection/{{ m.market }}/release" hx-confirm="Liberar a proteção de drawdown?">Liberar</button>{% endif %}
+      </div>
+    {% endif %}
+    <div class="muted small">Caixa livre: {{ "%.2f"|format(m.cash) }} · inicial {{ "%.0f"|format(m.initial) }} ·
+      <a href="#" hx-post="/api/wallet/{{ m.market }}/reset" hx-confirm="Zerar a carteira demo de {{ MARKET_LABELS[m.market] }} e apagar o histórico dela?">resetar carteira demo</a></div>
+  </div>
+{% endfor %}
+</div>

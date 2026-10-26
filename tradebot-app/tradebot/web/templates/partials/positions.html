@@ -1,0 +1,26 @@
+{% if not positions %}
+<p class="muted">Nenhuma posição aberta.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Par</th><th>Mercado</th><th>Lado</th><th>Qtd</th><th>Entrada</th><th>Atual</th><th>Stop</th><th>Alvo</th><th>Resultado</th><th>Aberta</th><th></th></tr></thead>
+  <tbody>
+  {% for row in positions %}{% set p = row.p %}
+    <tr>
+      <td><a href="/chart/{{ p.id }}">{{ p.symbol }}</a></td>
+      <td>{{ MARKET_LABELS[p.market] }}</td>
+      <td><span class="side {{ p.direction }}">{{ "Compra" if p.direction == "long" else "Venda" }}</span></td>
+      <td>{{ "%g"|format(p.qty) }}</td>
+      <td>{{ p.entry_price | price }}</td>
+      <td>{{ row.price | price }}</td>
+      <td>{{ p.stop_loss | price }}{% if p.stop_loss != p.initial_stop %} <span class="badge">trailing</span>{% endif %}</td>
+      <td>{{ p.take_profit | price }}</td>
+      <td class="{{ 'pos' if (row.pnl or 0) >= 0 else 'neg' }}">{% if row.pnl is not none %}{{ "%+.2f"|format(row.pnl) }} ({{ "%+.2f"|format(row.r) }}R){% else %}—{% endif %}</td>
+      <td title="{{ p.reason }}">{{ p.opened_at_ms | time }}</td>
+      <td><button class="btn small" hx-post="/api/positions/{{ p.id }}/close" hx-confirm="Fechar {{ p.symbol }} a mercado?">Fechar</button></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

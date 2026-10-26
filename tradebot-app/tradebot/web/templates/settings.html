@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+{% if saved %}<div class="alert ok">Configurações salvas. Valem a partir do próximo ciclo.</div>{% endif %}
+{% if error %}<div class="alert danger">Não salvou: {{ error }}</div>{% endif %}
+
+<form method="post" action="/settings" class="settings">
+  <section class="card">
+    <h2>Mercados</h2>
+    <p class="muted small">Cada mercado tem a sua carteira demo. No spot o bot só compra (sem venda a descoberto). Em futuros opera comprado e vendido, <b>sempre sem alavancagem (1x)</b>.</p>
+    <div class="grid-2">
+    {% for market in ["spot", "futures"] %}{% set ms = s.markets[market] %}
+      <fieldset>
+        <legend>{{ MARKET_LABELS[market] }}</legend>
+        <label class="check"><input type="checkbox" name="{{ market }}_enabled" {{ "checked" if ms.enabled }}> Operar neste mercado</label>
+        <label>Saldo inicial da carteira demo (USDT)<input type="number" step="1" min="10" name="{{ market }}_initial_balance" value="{{ ms.initial_balance }}"></label>
+        <label>Taxa por lado (%)<input type="number" step="0.001" min="0" max="1" name="{{ market }}_fee_pct" value="{{ '%.3f'|format(ms.fee_rate * 100) }}"></label>
+      </fieldset>
+    {% endfor %}
+    </div>
+    <p class="muted small">O saldo inicial só é aplicado ao resetar a carteira (no painel).</p>
+  </section>
+
+  <section class="card">
+    <h2>Estratégia</h2>
+    <label>Estratégia ativa
+      <select name="strategy" id="strategy-select">
+        {% for name, st in strategies.items() %}
+        <option value="{{ name }}" {{ "selected" if name == s.strategy }}>{{ st.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% for name, st in strategies.items() %}
+    <div class="strategy-params" data-strategy="{{ name }}" {% if name != s.strategy %}hidden{% endif %}>
+      <p class="muted small">{{ st.description }}</p>
+      <div class="param-grid">
+      {% for key, spec in st.params.items() %}{% set value = params[name][key] %}
+        {% if spec.kind == "bool" %}
+          <label class="check"><input type="checkbox" name="param_{{ name }}_{{ key }}" {{ "checked" if value }}> {{ spec.label }}</label>
+        {% elif spec.kind == "choice" %}
+          <label>{{ spec.label }}
+            <select name="param_{{ name }}_{{ key }}">
+              {% for c in spec.choices %}<option {{ "selected" if c == value }}>{{ c }}</option>{% endfor %}
+            </select>
+          </label>
+        {% else %}
+          <label title="{{ spec.help }}">{{ spec.label }}
+            <input type="number" name="param_{{ name }}_{{ key }}" value="{{ value }}"
+              step="{{ '1' if spec.kind == 'int' else 'any' }}"
+              {% if spec.min is not none %}min="{{ spec.min }}"{% endif %} {% if spec.max is not none %}max="{{ spec.max }}"{% endif %}>
+          </label>
+        {% endif %}
+      {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    <p class="alert warn small">Só a estratégia "Cruzamento EMA 9/21" foi validada em backtest até agora. As outras são candidatas: rode a pesquisa (<code>python -m tradebot.research</code>) antes de confiar nelas.</p>
+  </section>
+
+  <section class="card">
+    <h2>Pares</h2>
+    <div class="grid-2">
+      <label>Top N pares por volume<input type="number" min="1" max="100" name="top_symbols" value="{{ s.top_symbols }}"></label>
+      <label>Ou lista fixa (substitui o top N)<input type="text" name="symbols" placeholder="BTCUSDT ETHUSDT SOLUSDT" value="{{ s.symbols | join(' ') }}"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Risco</h2>
+    <div class="param-grid">
+      <label>Risco por operação (% do patrimônio)<input type="number" step="0.1" min="0.1" max="5" name="risk_per_trade_pct" value="{{ s.risk.risk_per_trade_pct }}"></label>
+      <label>Tamanho máximo da posição (% do patrimônio)<input type="number" step="1" min="1" max="100" name="max_position_pct" value="{{ s.risk.max_position_pct }}"></label>
+      <label>Máx. posições abertas (por mercado)<input type="number" min="1" max="20" name="max_open_positions" value="{{ s.risk.max_open_positions }}"></label>
+      <label>Máx. posições na mesma direção<input type="number" min="1" max="20" name="max_open_per_direction" value="{{ s.risk.max_open_per_direction }}"></label>
+      <label>Máx. operações por dia (por mercado)<input type="number" min="1" max="200" name="max_trades_per_day" value="{{ s.risk.max_trades_per_day }}"></label>
+      <label>Slippage máximo na entrada (%)<input type="number" step="0.1" min="0.1" max="5" name="max_slippage_pct" value="{{ s.risk.max_slippage_pct }}"></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Proteções automáticas</h2>
+    <div class="param-grid">
+      <label>Perda máxima no dia (%)<input type="number" step="0.1" min="0.1" name="daily_loss_limit_pct" value="{{ s.protections.daily_loss_limit_pct }}"></label>
+      <label>Stops seguidos para pausar<input type="number" min="1" name="stoploss_guard_count" value="{{ s.protections.stoploss_guard_count }}"></label>
+      <label>…dentro de (min)<input type="number" min="1" name="stoploss_guard_window_min" value="{{ s.protections.stoploss_guard_window_min }}"></label>
+      <label>…pausar por (min)<input type="number" min="1" name="stoploss_guard_pause_min" value="{{ s.protections.stoploss_guard_pause_min }}"></label>
+      <label>Espera para reentrar no mesmo par (min)<input type="number" min="0" name="symbol_cooldown_min" value="{{ s.protections.symbol_cooldown_min }}"></label>
+      <label>Drawdown máximo desde o pico (%)<input type="number" step="0.5" min="1" name="max_drawdown_pct" value="{{ s.protections.max_drawdown_pct }}"></label>
+      <label>Intervalo do ciclo (segundos)<input type="number" min="3" max="300" name="poll_seconds" value="{{ s.poll_seconds }}"></label>
+    </div>
+  </section>
+
+  <div class="form-actions"><button class="btn primary" type="submit">Salvar configurações</button></div>
+</form>
+<script>
+  const select = document.getElementById("strategy-select");
+  select.addEventListener("change", () => {
+    document.querySelectorAll(".strategy-params").forEach((el) => (el.hidden = el.dataset.strategy !== select.value));
+  });
+</script>
+{% endblock %}

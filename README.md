@@ -3,7 +3,9 @@
 Coleção de bots pessoais de análise de mercado — cada um foca num domínio diferente, mas
 compartilham a mesma filosofia central: **analisam e alertam, nunca executam nada sozinhos.**
 A decisão final e a execução (apostar, comprar, vender) são sempre manuais, de quem recebe o
-alerta.
+alerta. A exceção, a pedido do usuário (2026-10), é o `tradebot-app/`: ele executa ordens
+sozinho, mas por enquanto só numa carteira demo, com portão de risco, kill switch e nunca
+alavancagem.
 
 Nenhum dos dois projetos promete edge garantido. Onde existe uma comparação matemática
 objetiva (bot de apostas: probabilidade do modelo vs. odd do mercado), ela é usada como
@@ -39,13 +41,25 @@ Ver [`crypto-daytrade/README.md`](crypto-daytrade/README.md) e
 arquitetura — inclui um aviso sobre a implicação regulatória (CVM) de oferecer sinais pra
 terceiros no Brasil.
 
+### 🖥️ [`tradebot-app/`](tradebot-app/) — Day trade automático com painel web (conta demo)
+
+Sucessor do `crypto-daytrade/` para quem quer que o bot **opere sozinho**: motor de execução
+em spot e futuros da Binance (sempre sem alavancagem), por enquanto só numa **carteira demo**
+(preço e livro de ofertas reais, dinheiro de mentira). Painel local no navegador com saldo,
+posições, gráfico, histórico completo, log de decisões, parâmetros e botão de pânico.
+Portão de risco com kill switch e proteções automáticas, mais uma ferramenta de pesquisa
+(backtest) para validar estratégias novas antes de usá-las. Ver
+[`tradebot-app/README.md`](tradebot-app/README.md) e [`tradebot-app/PLANO.md`](tradebot-app/PLANO.md).
+
 ## Estrutura
 
 ```
 TradeBot/
 ├── .github/workflows/          # automação (GitHub Actions) dos dois bots
 ├── sports-betting/             # bot de apostas esportivas
-└── crypto-daytrade/            # bot de sinais técnicos de cripto
+├── crypto-daytrade/            # bot de sinais técnicos de cripto (alertas no Telegram)
+├── forex-daytrade/             # sinais de forex (reprovado no backtest, fora de produção)
+└── tradebot-app/               # app de day trade automático com painel web (conta demo)
 ```
 
 Cada projeto é independente — tem seu próprio `.env`, dependências (`requirements.txt`),

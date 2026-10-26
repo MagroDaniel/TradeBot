@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="/static/vendor/lightweight-charts-4.2.0.js"></script>
+{% endblock %}
+{% block content %}
+<section id="status" hx-get="/partials/status" hx-trigger="load, every 5s, refresh from:body" hx-swap="innerHTML"></section>
+
+<section class="card">
+  <div class="card-head"><h2>Patrimônio da carteira demo</h2></div>
+  <div id="equity-chart" class="chart"></div>
+  <p class="muted small">Ponto a cada 5 minutos com o bot ligado. Inclui o resultado não realizado das posições abertas.</p>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Posições abertas</h2></div>
+  <div hx-get="/partials/positions" hx-trigger="load, every 5s, refresh from:body"></div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><h2>Histórico (todas as operações, inclusive perdas)</h2></div>
+    <div hx-get="/partials/trades" hx-trigger="load, every 15s, refresh from:body"></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Log de decisões</h2></div>
+    <div class="scroll" hx-get="/partials/events" hx-trigger="load, every 5s, refresh from:body"></div>
+  </section>
+</div>
+
+<script>
+  (function () {
+    const el = document.getElementById("equity-chart");
+    const chart = LightweightCharts.createChart(el, {
+      height: 260,
+      layout: { background: { color: "transparent" }, textColor: "#9aa4b2" },
+      grid: { vertLines: { color: "#1f2633" }, horzLines: { color: "#1f2633" } },
+      timeScale: { timeVisible: true },
+      localization: { locale: "pt-BR" },
+    });
+    const colors = { spot: "#f0b90b", futures: "#4f9cf9" };
+    const series = {};
+    for (const m of ["spot", "futures"]) {
+      series[m] = chart.addLineSeries({ color: colors[m], lineWidth: 2, title: m === "spot" ? "Spot" : "Futuros" });
+    }
+    async function load() {
+      const data = await fetch("/api/equity").then((r) => r.json());
+      for (const m of Object.keys(series)) series[m].setData(data[m] || []);
+    }
+    load();
+    setInterval(load, 60000);
+    new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth })).observe(el);
+  })();
+</script>
+{% endblock %}

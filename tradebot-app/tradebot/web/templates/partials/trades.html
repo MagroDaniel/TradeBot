@@ -1,0 +1,20 @@
+{% if not trades %}
+<p class="muted">Nenhuma operação fechada ainda.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Fechou</th><th>Par</th><th>Lado</th><th>Saída</th><th>Resultado</th></tr></thead>
+  <tbody>
+  {% for p in trades %}{% set pnl = p.net_pnl() %}
+    <tr>
+      <td>{{ p.closed_at_ms | time }}</td>
+      <td><a href="/chart/{{ p.id }}">{{ p.symbol }}</a> <span class="muted small">{{ MARKET_LABELS[p.market] }}</span></td>
+      <td><span class="side {{ p.direction }}">{{ "Compra" if p.direction == "long" else "Venda" }}</span></td>
+      <td>{{ EXIT_LABELS.get(p.exit_reason, p.exit_reason) }}</td>
+      <td class="{{ 'pos' if pnl >= 0 else 'neg' }}">{{ "%+.2f"|format(pnl) }} ({{ "%+.2f"|format(p.r_multiple()) }}R)</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}

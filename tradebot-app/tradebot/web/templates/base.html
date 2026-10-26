@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TradeBot</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/vendor/htmx-1.9.12.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">TradeBot <span class="badge demo">CONTA DEMO</span></div>
+    <nav>
+      <a href="/" class="{{ 'active' if page == 'dashboard' }}">Painel</a>
+      <a href="/settings" class="{{ 'active' if page == 'settings' }}">Configurações</a>
+    </nav>
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+  <div id="toast" class="toast" hidden></div>
+  <script>
+    document.body.addEventListener("toast", (e) => {
+      const el = document.getElementById("toast");
+      el.textContent = e.detail.value;
+      el.hidden = false;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => (el.hidden = true), 4000);
+    });
+    document.body.addEventListener("htmx:responseError", (e) => {
+      const el = document.getElementById("toast");
+      el.textContent = "Erro: " + (e.detail.xhr.responseText || e.detail.xhr.status);
+      el.hidden = false;
+    });
+  </script>
+</body>
+</html>

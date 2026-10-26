@@ -1,0 +1,14 @@
+{% if not events %}
+<p class="muted">Sem eventos ainda.</p>
+{% else %}
+<ul class="events">
+  {% for e in events %}
+  <li class="ev {{ e.level }} {{ e.kind }}">
+    <span class="muted small">{{ e.ts_ms | time }}</span>
+    {% if e.symbol %}<b>{{ e.symbol }}</b>{% endif %}
+    {% if e.market %}<span class="muted small">{{ MARKET_LABELS.get(e.market, e.market) }}</span>{% endif %}
+    <span>{{ e.message }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

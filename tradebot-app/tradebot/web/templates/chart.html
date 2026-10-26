@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="/static/vendor/lightweight-charts-4.2.0.js"></script>
+{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <h2>{{ p.symbol }} · {{ MARKET_LABELS[p.market] }} · {{ "Compra" if p.direction == "long" else "Venda" }}</h2>
+    <a href="/" class="btn small">← Voltar</a>
+  </div>
+  <p class="muted">{{ p.reason }}</p>
+  <div id="price-chart" class="chart tall"></div>
+  <p class="muted small">Linhas: entrada (branca), stop atual (vermelha), stop inicial (vermelha tracejada), alvo (verde){% if p.exit_price %}, saída (amarela){% endif %}.</p>
+</section>
+<script>
+  (async function () {
+    const data = await fetch("/api/candles/{{ p.id }}").then((r) => r.json());
+    const el = document.getElementById("price-chart");
+    const chart = LightweightCharts.createChart(el, {
+      height: 480,
+      layout: { background: { color: "transparent" }, textColor: "#9aa4b2" },
+      grid: { vertLines: { color: "#1f2633" }, horzLines: { color: "#1f2633" } },
+      timeScale: { timeVisible: true },
+    });
+    const candles = chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", wickUpColor: "#26a69a", wickDownColor: "#ef5350", borderVisible: false });
+    candles.setData(data.candles);
+    const line = (price, color, title, style = 0) => price && candles.createPriceLine({ price, color, title, lineWidth: 1, lineStyle: style });
+    line(data.entry, "#e6e6e6", "entrada");
+    line(data.stop, "#ef5350", "stop");
+    if (data.initial_stop !== data.stop) line(data.initial_stop, "#ef5350", "stop inicial", 2);
+    line(data.target, "#26a69a", "alvo");
+    line(data.exit, "#f0b90b", "saída");
+    const markers = [{ time: Math.floor(data.opened / (60)) * 60, position: data.direction === "long" ? "belowBar" : "aboveBar", color: "#4f9cf9", shape: data.direction === "long" ? "arrowUp" : "arrowDown", text: "entrada" }];
+    if (data.closed) markers.push({ time: data.closed, position: "aboveBar", color: "#f0b90b", shape: "circle", text: "saída" });
+    // marcadores precisam cair num candle existente: usa o candle que contém o horário
+    const times = data.candles.map((c) => c.time);
+    const snap = (t) => times.filter((x) => x <= t).pop() || times[0];
+    candles.setMarkers(markers.map((m) => ({ ...m, time: snap(m.time) })).sort((a, b) => a.time - b.time));
+    new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth })).observe(el);
+  })();
+</script>
+{% endblock %}
