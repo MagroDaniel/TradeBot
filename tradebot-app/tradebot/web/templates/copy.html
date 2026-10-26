@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+{% if error %}<div class="alert danger">{{ error }}</div>{% endif %}
+<section class="card">
+  <h2>Copiar um trader da Hyperliquid</h2>
+  <p class="muted small">Na Hyperliquid as posições de qualquer carteira são públicas. O robô de cópia segue as aberturas e fechamentos do trader e executa nos futuros da Binance (carteira demo), sempre a 1x e com stop próprio. Analise a carteira antes: o ranking mostra quem teve lucro recente, e muitos deles caem depois.</p>
+  <form method="get" action="/copy/analyze" class="settings inline-form">
+    <label>Endereço da carteira<input type="text" name="address" placeholder="0x..." spellcheck="false" autocomplete="off" required></label>
+    <button class="btn primary" type="submit">Analisar</button>
+  </form>
+</section>
+
+{% if ranking %}
+<section class="card">
+  <div class="card-head">
+    <h2>Ranking por lucro ({{ {"week": "semana", "month": "mês", "allTime": "histórico total"}[window] }})</h2>
+    <div class="small">
+      {% for w, label in [("week", "semana"), ("month", "mês"), ("allTime", "total")] %}
+        <a href="/copy?window={{ w }}" class="{{ 'active-link' if w == window }}">{{ label }}</a>{% if not loop.last %} · {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>#</th><th>Carteira</th><th>Patrimônio</th><th>Lucro no período</th><th>Retorno</th><th>Lucro total</th><th></th></tr></thead>
+    <tbody>
+    {% for r in ranking %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><code>{{ r.address[:8] }}…{{ r.address[-6:] }}</code>{% if r.name %} <span class="muted small">{{ r.name }}</span>{% endif %}</td>
+        <td>{{ "{:,.0f}".format(r.account_value) }}</td>
+        <td class="{{ 'pos' if r.pnl >= 0 else 'neg' }}">{{ "{:+,.0f}".format(r.pnl) }}</td>
+        <td class="{{ 'pos' if r.roi >= 0 else 'neg' }}">{{ "%+.1f"|format(r.roi * 100) }}%</td>
+        <td class="{{ 'pos' if r.all_time_pnl >= 0 else 'neg' }}">{{ "{:+,.0f}".format(r.all_time_pnl) }}</td>
+        <td><a class="btn small" href="/copy/analyze?address={{ r.address }}">Analisar</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Valores em USD. Só carteiras com mais de US$100 mil. Fonte: ranking público do site da Hyperliquid.</p>
+</section>
+{% endif %}
+{% endblock %}

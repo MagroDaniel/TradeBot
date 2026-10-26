@@ -22,8 +22,9 @@ from pathlib import Path
 
 from tradebot import risk
 from tradebot.brokers import OrderRejected, PaperBroker
+from tradebot.hyperliquid import HyperliquidClient, binance_symbol
 from tradebot.market_data import BinanceMarketData, closed_only
-from tradebot.models import FUTURES, MARKETS, SPOT, Position, reprice_exit_plan
+from tradebot.models import FUTURES, LONG, MARKETS, SPOT, ExitPlan, Position, Signal, reprice_exit_plan
 from tradebot.position import evaluate_bar
 from tradebot.settings import MAX_BOTS, AppSettings, BotConfig
 from tradebot.store import Store, now_ms
@@ -36,6 +37,7 @@ STATES = ("stopped", "running", "paused")
 EXIT_REASON_LABELS = {
     "stop_loss": "stop", "trailing_stop": "trailing stop", "take_profit": "alvo", "time_limit": "tempo-limite",
     "strategy_exit": "saída da estratégia", "manual": "manual", "emergency": "PARAR TUDO",
+    "leader_exit": "o trader copiado fechou",
 }
 CANDLE_SETTLE_MS = 5_000  # espera a Binance consolidar o candle recém-fechado
 EQUITY_SNAPSHOT_MS = 5 * 60_000
@@ -56,6 +58,10 @@ class Bot:
         self.universe: dict[str, tuple[int, list[str]]] = {}
         self.last_equity_snapshot: dict[str, int] = {}
         self.protection_status: dict[str, str | None] = {m: None for m in MARKETS}
+        # copy trading: moedas que o trader já tinha (ou que o robô saiu por stop) e que só
+        # voltam a ser copiadas depois que ele fechar e reabrir; None = ainda não sincronizou
+        self.copy_baseline: set[str] | None = None
+        self.copy_skipped: set[str] = set()  # moedas sem par na Binance (avisadas 1x)
         self.build_brokers()
 
     def build_brokers(self) -> None:
@@ -84,8 +90,11 @@ class Bot:
 
 
 class Engine:
-    def __init__(self, store: Store, data_dir: Path, market_data: dict | None = None) -> None:
+    def __init__(self, store: Store, data_dir: Path, market_data: dict | None = None,
+                 hyperliquid: HyperliquidClient | None = None) -> None:
         self.store = store
+        self.hyperliquid = hyperliquid or HyperliquidClient()
+        self._leader_cache: dict[str, object] = {}
         self.data_dir = Path(data_dir)
         self.data = market_data or {m: BinanceMarketData(m) for m in MARKETS}
         self.app_settings = AppSettings.from_dict(store.get_json("app_settings") or store.get_json("settings"))
@@ -142,6 +151,9 @@ class Engine:
             config.validate()
             self.store.update_bot(bot_id, config.name, config.to_dict())
             strategy_changed = config.strategy != bot.config.strategy
+            if config.params().get("wallet") != bot.config.params().get("wallet"):
+                bot.copy_baseline = None
+                bot.copy_skipped.clear()
             bot.name, bot.config = config.name, config
             bot.build_brokers()
             bot.universe.clear()
@@ -201,7 +213,10 @@ class Engine:
     def start(self, bot_id: int) -> None:
         with self.lock:
             bot = self.get_bot(bot_id)
+            if get_strategy(bot.config.strategy).kind == "copy" and not bot.config.params()["wallet"]:
+                raise ValueError("Informe a carteira a copiar nas configurações do robô antes de ligar")
             bot.last_bucket.clear()  # não entra no candle que já fechou antes de ligar
+            bot.copy_baseline = None  # copy: o que o trader já tem agora não é copiado
             self._set_state(bot, "running", "Robô ligado")
         self._wake.set()
 
@@ -264,6 +279,7 @@ class Engine:
         with self.lock:
             now = now or now_ms()
             self._candle_cache = {}
+            self._leader_cache = {}
             active = [b for b in self.bots.values() if b.state != "stopped"]
             markets = {m for b in active for m in b.enabled_markets()}
             for market in (SPOT, FUTURES):
@@ -303,8 +319,12 @@ class Engine:
 
         self._update_equity_marks(bot, market, now)
 
-        # 2) candle fechado → saída por estratégia + busca de entradas
         strategy = get_strategy(bot.config.strategy)
+        if strategy.kind == "copy":
+            self._sync_copy(bot, market, bot.config.params(), now)
+            return
+
+        # 2) candle fechado → saída por estratégia + busca de entradas
         params = bot.config.params()
         tf_ms = TIMEFRAME_MINUTES[strategy.timeframe(params)] * 60_000
         bucket = (now - CANDLE_SETTLE_MS) // tf_ms
@@ -332,22 +352,26 @@ class Engine:
         candles = self._candle_cache[key]
         return candles[-count:] if len(candles) >= count else []
 
-    def _scan(self, bot: Bot, market: str, strategy, params: dict, now: int) -> None:
+    def _entries_blocked(self, bot: Bot, market: str, recent_closed: list[Position], now: int) -> bool:
+        """Robô pausado/desligado, kill switch ou proteção ativa → sem entrada nova."""
         if bot.state != "running":
-            return
+            return True
         if risk.is_halted(self.data_dir):
             self._set_protection(bot, market, "Kill switch acionado — entradas bloqueadas")
-            return
-        cfg = bot.config
-        recent_closed = self.store.closed_positions(self.account, bot.id, market, since_ms=now - 24 * 3600_000)
+            return True
         equity = bot.equity(market)
         reason = risk.active_protection(
-            cfg, recent_closed, equity,
+            bot.config, recent_closed, equity,
             self.store.get_json(bot.key(market, "peak")) or equity,
             (self.store.get_json(bot.key(market, "day_start")) or {}).get("equity", equity), now,
         )
         self._set_protection(bot, market, reason)
-        if reason:
+        return reason is not None
+
+    def _scan(self, bot: Bot, market: str, strategy, params: dict, now: int) -> None:
+        cfg = bot.config
+        recent_closed = self.store.closed_positions(self.account, bot.id, market, since_ms=now - 24 * 3600_000)
+        if self._entries_blocked(bot, market, recent_closed, now):
             return
 
         interval = strategy.timeframe(params)
@@ -370,7 +394,8 @@ class Engine:
                 self.store.log_event("error", f"Erro ao analisar {symbol}: {exc}", level="error",
                                      bot_id=bot.id, market=market, symbol=symbol)
 
-    def _try_open(self, bot: Bot, market: str, signal, open_positions: list[Position], now: int) -> None:
+    def _try_open(self, bot: Bot, market: str, signal, open_positions: list[Position], now: int,
+                  target_notional: float | None = None, extra: dict | None = None) -> None:
         log = self.store.log_event
         log("signal", f"Sinal {signal.direction}: {signal.reason}", bot_id=bot.id, market=market, symbol=signal.symbol,
             data={"entry": signal.entry, "stop": signal.exit_plan.stop_loss, "target": signal.exit_plan.take_profit})
@@ -382,7 +407,12 @@ class Engine:
 
         broker = bot.brokers[market]
         rules = self.data[market].symbol_rules(signal.symbol)
-        qty = rules.round_qty(risk.position_size(signal, bot.equity(market), broker.cash(), bot.config))
+        if target_notional is None:
+            qty = risk.position_size(signal, bot.equity(market), broker.cash(), bot.config)
+        else:  # copy trading: tamanho pela fatia da carteira copiada, com os mesmos tetos
+            cap = min(bot.equity(market) * bot.config.risk.max_position_pct / 100, broker.cash() * 0.98)
+            qty = max(0.0, min(target_notional, cap)) / signal.entry
+        qty = rules.round_qty(qty)
         if qty < rules.min_qty or qty <= 0 or qty * signal.entry < rules.min_notional:
             log("denied", f"Entrada negada: tamanho {qty} abaixo do mínimo do par", bot_id=bot.id, market=market,
                 symbol=signal.symbol)
@@ -400,7 +430,7 @@ class Engine:
             take_profit=plan.take_profit, time_limit_minutes=plan.time_limit_minutes,
             trailing_activation=plan.trailing_activation, trailing_distance=plan.trailing_distance,
             opened_at_ms=now, strategy=signal.strategy, reason=signal.reason, entry_fee=fill.fee,
-            best_price=fill.price,
+            best_price=fill.price, extra=dict(extra or {}),
         )
         self.store.insert_position(self.account, bot.id, position)
         log("open", f"Abriu {signal.direction} {fill.qty:g} @ {fill.price:.6g} "
@@ -420,12 +450,86 @@ class Engine:
         p.exit_reason = reason
         p.closed_at_ms = now or now_ms()
         self.store.update_position(p)
+        coin = p.extra.get("coin")
+        if coin and reason in ("stop_loss", "trailing_stop") and bot.copy_baseline is not None:
+            bot.copy_baseline.add(coin)  # saiu pelo stop: só recopia quando o trader reabrir
         pnl = p.net_pnl()
         self.store.log_event(
             "close", f"Fechou ({EXIT_REASON_LABELS.get(reason, reason)}) @ {fill.price:.6g}: {pnl:+.2f} USDT "
             f"({p.r_multiple():+.2f}R)", level="info" if pnl >= 0 else "warning", bot_id=bot.id, market=p.market,
             symbol=p.symbol, data={"position_id": p.id, "pnl": pnl})
         return True
+
+    # --- copy trading ---
+    def _leader_state(self, address: str):
+        key = address.lower()
+        if key not in self._leader_cache:  # vários robôs copiando a mesma carteira: 1 chamada por ciclo
+            self._leader_cache[key] = self.hyperliquid.state(address)
+        return self._leader_cache[key]
+
+    def _sync_copy(self, bot: Bot, market: str, params: dict, now: int) -> None:
+        if market != FUTURES:
+            return
+        address = params["wallet"]
+        if not address:
+            return
+        try:
+            leader = self._leader_state(address)
+        except Exception as exc:
+            # sem dados do trader não fecha nada: na dúvida, mantém as posições com o stop próprio
+            self._log_error(f"copy:{address}", f"Não consegui ler a carteira {address[:10]}…: {exc}", now, bot.id)
+            return
+        short = f"{address[:6]}…{address[-4:]}"
+
+        # 1) saídas: o trader fechou ou inverteu
+        for p in self.store.open_positions(self.account, bot.id, market):
+            coin = p.extra.get("coin")
+            if not coin:
+                continue
+            lp = leader.positions.get(coin)
+            if lp is None or lp.direction != p.direction:
+                self._close(bot, p, "leader_exit", now)
+
+        # 2) linha de base: o que ele já tinha quando o robô ligou não é copiado
+        if bot.copy_baseline is None:
+            bot.copy_baseline = set() if params["copy_existing"] else set(leader.positions)
+            self.store.log_event(
+                "copy", f"Acompanhando {short}: {len(leader.positions)} posições abertas agora"
+                + ("" if params["copy_existing"] else " (não serão copiadas; só as próximas que ele abrir)"),
+                bot_id=bot.id, market=market)
+        else:
+            bot.copy_baseline &= set(leader.positions)  # fechou → se reabrir, copia
+
+        recent_closed = self.store.closed_positions(self.account, bot.id, market, since_ms=now - 24 * 3600_000)
+        if self._entries_blocked(bot, market, recent_closed, now):
+            return
+
+        # 3) entradas: moedas novas na carteira dele
+        exposure = max(leader.total_notional, leader.account_value)  # >1x dele é reduzido pra 1x aqui
+        held = {p.extra.get("coin") for p in self.store.open_positions(self.account, bot.id, market)}
+        for coin, lp in leader.positions.items():
+            if coin in bot.copy_baseline or coin in held or coin in bot.copy_skipped:
+                continue
+            symbol = binance_symbol(coin)
+            price = self.last_prices[market].get(symbol) if symbol else None
+            if symbol is None or price is None:
+                bot.copy_skipped.add(coin)
+                self.store.log_event("copy", f"{coin}: sem par equivalente nos futuros da Binance, não copiado",
+                                     level="warning", bot_id=bot.id, market=market)
+                continue
+            if exposure <= 0:
+                continue
+            target = bot.equity(market) * params["copy_pct"] / 100 * lp.notional / exposure
+            sign = 1 if lp.direction == LONG else -1
+            plan = ExitPlan(stop_loss=price * (1 - sign * params["stop_pct"] / 100))
+            signal = Signal(symbol, lp.direction, price, plan,
+                            f"Copiou {short}: {lp.direction} {coin} ({lp.leverage:g}x lá, "
+                            f"{lp.notional / leader.account_value:.0%} da carteira dele)" if leader.account_value else
+                            f"Copiou {short}: {lp.direction} {coin}", "copy_wallet")
+            self._try_open(bot, market, signal, self.store.open_positions(self.account, bot.id, market), now,
+                           target_notional=target, extra={"coin": coin, "leader": address.lower()})
+            if not any(p.extra.get("coin") == coin for p in self.store.open_positions(self.account, bot.id, market)):
+                bot.copy_baseline.add(coin)  # negada (limite/tamanho): não insiste a cada ciclo
 
     def _log_error(self, key: str, message: str, now: int, bot_id: int | None = None) -> None:
         """Sem internet o mesmo erro se repetiria a cada ciclo — registra 1x a cada 5 min."""

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="/static/vendor/lightweight-charts-4.2.0.js"></script>
+{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <h2 class="break">Carteira <code>{{ r.address }}</code></h2>
+    <a href="/copy" class="btn small">← Ranking</a>
+  </div>
+  <div class="kpis">
+    <div><span class="label">Patrimônio</span><span class="value">{{ "{:,.0f}".format(r.account_value) }}</span><span class="unit">USD</span></div>
+    <div><span class="label">Alavancagem agora</span><span class="value">{{ "%.1f"|format(r.effective_leverage) }}x</span></div>
+    <div><span class="label">Lucro no mês</span><span class="value {{ 'pos' if r.periods.month.pnl >= 0 else 'neg' }}">{{ "{:+,.0f}".format(r.periods.month.pnl) }}</span></div>
+    <div><span class="label">Lucro total</span><span class="value {{ 'pos' if r.periods.allTime.pnl >= 0 else 'neg' }}">{{ "{:+,.0f}".format(r.periods.allTime.pnl) }}</span>
+      <span class="unit">pior queda: {{ "{:,.0f}".format(r.periods.allTime.max_drawdown) }}{% if r.periods.allTime.max_drawdown_pct is not none %} ({{ "%.0f"|format(r.periods.allTime.max_drawdown_pct) }}% do maior patrimônio){% endif %}</span></div>
+  </div>
+</section>
+
+{% for w in r.warnings %}<div class="alert warn small">⚠ {{ w }}</div>{% endfor %}
+
+<section class="card">
+  <div class="card-head"><h2>Lucro acumulado (futuros, histórico total)</h2></div>
+  <div id="pnl-chart" class="chart"></div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Operações recentes</h2>
+    <div class="table-wrap">
+    <table>
+      <tr><td>Execuções analisadas</td><td>{{ r.fills }}{% if r.span_days %} em {% if r.span_days >= 1 %}{{ "%.0f"|format(r.span_days) }} dias{% else %}{{ "%.1f"|format(r.span_days * 24) }} horas{% endif %} ({{ "{:,.0f}".format(r.fills_per_day) }}/dia){% endif %}</td></tr>
+      <tr><td>Fechamentos</td><td>{{ r.closed_trades }}</td></tr>
+      <tr><td>Fechamentos com lucro</td><td>{% if r.win_rate is not none %}{{ "%.0f"|format(r.win_rate) }}%{% else %}—{% endif %}</td></tr>
+      <tr><td>Resultado desses fechamentos</td><td class="{{ 'pos' if r.closed_pnl >= 0 else 'neg' }}">{{ "{:+,.0f}".format(r.closed_pnl) }} USD</td></tr>
+      <tr><td>Taxas pagas</td><td>{{ "{:,.0f}".format(r.fees) }} USD</td></tr>
+      <tr><td>Moedas mais operadas</td><td class="wrap">{% for c, n in r.top_coins %}{{ c }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+    </table>
+    </div>
+    <p class="muted small">A API devolve só as 2000 execuções mais recentes; quem opera muito pode ter só alguns dias de histórico aqui.</p>
+  </section>
+  <section class="card">
+    <h2>Posições abertas agora</h2>
+    {% if not r.positions %}<p class="muted">Nenhuma.</p>{% else %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Moeda</th><th>Lado</th><th>Valor</th><th>Alav.</th><th>Resultado</th><th>Na Binance</th></tr></thead>
+      {% for p in r.positions %}
+      <tr>
+        <td>{{ p.coin }}</td>
+        <td><span class="side {{ p.direction }}">{{ "Compra" if p.direction == "long" else "Venda" }}</span></td>
+        <td>{{ "{:,.0f}".format(p.notional) }}</td>
+        <td>{{ "%g"|format(p.leverage) }}x</td>
+        <td class="{{ 'pos' if p.unrealized_pnl >= 0 else 'neg' }}">{{ "{:+,.0f}".format(p.unrealized_pnl) }}</td>
+        {% set sym = binance_symbol(p.coin) %}
+        <td>{% if not sym or (futures_prices and sym not in futures_prices) %}<span class="muted">não tem</span>{% else %}{{ sym }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    <p class="muted small">Por padrão, o robô NÃO copia estas: só as que ele abrir depois que você ligar o robô.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  {% if copying %}
+    <p>Esta carteira já é copiada por: {% for b in copying %}<a href="/bots/{{ b.id }}">{{ b.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+  {% endif %}
+  <form method="post" action="/bots" class="settings inline-form">
+    <input type="hidden" name="strategy" value="copy_wallet">
+    <input type="hidden" name="wallet" value="{{ r.address }}">
+    <label>Nome do robô<input type="text" name="name" maxlength="40" value="Copiar {{ r.address[:6] }}…{{ r.address[-4:] }}"></label>
+    <label>Copiar risco e proteções de
+      <select name="copy_from">
+        <option value="">(padrão)</option>
+        {% for b in nav_bots() %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn primary" type="submit">Criar robô de cópia (demo)</button>
+  </form>
+  <p class="muted small">O robô é criado desligado, na carteira demo de futuros. Revise o stop e o tamanho nas configurações e ligue na aba dele.</p>
+</section>
+
+<script>
+  (function () {
+    const el = document.getElementById("pnl-chart");
+    const chart = LightweightCharts.createChart(el, {
+      height: 260,
+      layout: { background: { color: "transparent" }, textColor: "#9aa4b2" },
+      grid: { vertLines: { color: "#1f2633" }, horzLines: { color: "#1f2633" } },
+      timeScale: { timeVisible: true },
+    });
+    const series = chart.addAreaSeries({ lineColor: "#4f9cf9", topColor: "rgba(79,156,249,.25)", bottomColor: "rgba(79,156,249,0)", lineWidth: 2 });
+    series.setData({{ chart | tojson }});
+    chart.timeScale().fitContent();
+    new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth })).observe(el);
+  })();
+</script>
+{% endblock %}

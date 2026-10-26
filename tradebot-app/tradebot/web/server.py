@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from tradebot import risk
+from tradebot import hyperliquid, risk
 from tradebot.engine import Bot, Engine
 from tradebot.models import MARKETS
 from tradebot.risk import utc_day_start_ms
@@ -38,7 +38,7 @@ MARKET_LABELS = {"spot": "Spot", "futures": "Futuros"}
 STATE_LABELS = {"running": "Ligado", "paused": "Só gerenciando posições", "stopped": "Desligado"}
 EXIT_LABELS = {
     "stop_loss": "Stop", "trailing_stop": "Trailing", "take_profit": "Alvo", "time_limit": "Tempo",
-    "strategy_exit": "Estratégia", "manual": "Manual", "emergency": "Emergência",
+    "strategy_exit": "Estratégia", "manual": "Manual", "emergency": "Emergência", "leader_exit": "Trader saiu",
 }
 # Estratégias aprovadas na pesquisa (R líquido > 0 em todas as fatias, p < 0,10). Vazio desde a
 # pesquisa de 2026-10-26 (12 meses, custos reais): nenhuma passou, nem a ema_cross — ver PLANO.md.
@@ -67,7 +67,7 @@ def create_app(engine: Engine, token: str | None = None) -> FastAPI:
     templates.env.filters.update(time=_fmt_time, price=_fmt_price)
     templates.env.globals.update(
         MARKET_LABELS=MARKET_LABELS, STATE_LABELS=STATE_LABELS, EXIT_LABELS=EXIT_LABELS, STRATEGIES=STRATEGIES,
-        VALIDATED=VALIDATED_STRATEGIES,
+        VALIDATED=VALIDATED_STRATEGIES, binance_symbol=hyperliquid.binance_symbol,
         nav_bots=lambda: [{"id": b.id, "name": b.name, "state": b.state} for b in engine.bots.values()],
     )
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
@@ -155,6 +155,11 @@ def create_app(engine: Engine, token: str | None = None) -> FastAPI:
             if strategy != base["strategy"]:
                 base["strategy_params"] = {}  # parâmetros de outra estratégia não servem
             base.update(name=form.get("name", "").strip() or STRATEGIES[strategy].label, strategy=strategy)
+            if STRATEGIES[strategy].kind == "copy":
+                base["markets"]["spot"]["enabled"] = False  # copy trading é só em futuros
+                base["markets"]["futures"]["enabled"] = True
+                if form.get("wallet"):
+                    base["strategy_params"]["wallet"] = form["wallet"].strip()
             bot_id = engine.create_bot(BotConfig.from_dict(base))
         except (ValueError, KeyError, TypeError) as exc:
             return RedirectResponse(f"/bots/new?{urlencode({'error': str(exc)})}", status_code=303)
@@ -247,8 +252,40 @@ def create_app(engine: Engine, token: str | None = None) -> FastAPI:
     # --- comandos ---
     @app.post("/api/bots/{bot_id}/start")
     def start(bot_id: int):
-        engine.start(bot_or_404(bot_id).id)
+        try:
+            engine.start(bot_or_404(bot_id).id)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, 409, headers={"HX-Trigger": json.dumps({"toast": str(exc)})})
         return refreshed("Robô ligado")
+
+    # --- copy trading: ranking e análise de carteira ---
+    @app.get("/copy", response_class=HTMLResponse)
+    def copy_page(request: Request, window: str = "month"):
+        window = window if window in ("week", "month", "allTime") else "month"
+        try:
+            ranking, error = engine.hyperliquid.leaderboard(limit=25, window=window, min_account=100_000), ""
+        except Exception as exc:
+            ranking, error = [], str(exc)
+        return render(request, "copy.html", page="copy", ranking=ranking, error=error, window=window)
+
+    @app.get("/copy/analyze", response_class=HTMLResponse)
+    def copy_analyze(request: Request, address: str = ""):
+        address = address.strip()
+        if not hyperliquid.valid_address(address):
+            return render(request, "copy.html", page="copy", ranking=[], window="month",
+                          error="Endereço inválido: use o endereço completo da carteira (0x + 40 caracteres).")
+        hl = engine.hyperliquid
+        try:
+            report = hyperliquid.analyze(address, hl.state(address), hl.fills(address), hl.portfolio(address))
+        except Exception as exc:
+            return render(request, "copy.html", page="copy", ranking=[], window="month",
+                          error=f"Não consegui ler a carteira: {exc}")
+        chart = [{"time": t // 1000, "value": round(v, 2)} for t, v in report["periods"]["allTime"]["pnl_history"]]
+        return render(request, "copy_analyze.html", page="copy", r=report, chart=chart,
+                      futures_prices=engine.last_prices.get("futures") or {},
+                      copying=[b for b in engine.bots.values()
+                               if b.config.strategy == "copy_wallet"
+                               and b.config.params()["wallet"].lower() == report["address"]])
 
     @app.post("/api/bots/{bot_id}/pause")
     def pause(bot_id: int):

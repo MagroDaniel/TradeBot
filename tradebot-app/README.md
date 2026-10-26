@@ -59,6 +59,36 @@ Clicar no par abre o gráfico de candles com entrada, stop (atual e inicial), al
 O motor busca preços e candles **uma vez por ciclo** e compartilha entre os robôs, então ter
 vários ligados não multiplica as chamadas à Binance.
 
+## Copy trading (copiar um trader)
+
+A aba **Copiar trader** mostra o ranking público da [Hyperliquid](https://app.hyperliquid.xyz/leaderboard)
+(corretora de futuros on-chain onde as posições de qualquer carteira são públicas) e analisa
+qualquer carteira antes de você copiar:
+- lucro total e do mês;
+- pior queda;
+- alavancagem atual;
+- acerto dos fechamentos recentes;
+- frequência de operação;
+- posições abertas agora.
+
+A análise também mostra alertas, por exemplo "opera demais, a cópia vai chegar atrasada".
+
+De lá você cria um robô **Copiar carteira**. Ele aparece como qualquer outro robô (aba própria,
+carteira demo, comparação na Visão geral) e:
+- quando o trader **abre** uma moeda nova, abre a mesma direção nos futuros da Binance;
+- quando o trader **fecha ou inverte**, fecha (e abre o lado novo, se ele inverteu);
+- **não copia** o que ele já tinha aberto quando você ligou o robô (opcional nas
+  configurações);
+- usa a **fatia da carteira dele, sem a alavancagem dele**: se ele está a 5x, tudo é reduzido
+  para caber em 1x do seu saldo (padrão: até 90% do patrimônio do robô);
+- tem **stop próprio** (padrão 5%), porque não dá para ver o stop dele. Se o stop bater, só volta
+  a copiar aquela moeda quando ele fechar e reabrir;
+- se a Hyperliquid não responder, **não fecha nada**: mantém as posições com o stop próprio;
+- passa pelo mesmo portão de risco dos outros robôs (limites, proteções, PARAR TUDO).
+
+Aumentos e reduções parciais do trader ainda não são copiados, só aberturas e fechamentos.
+Moedas sem par nos futuros da Binance são puladas (e avisadas no log).
+
 ## Como o bot decide e se protege
 
 1. **Estratégia**: só diz "entrar aqui, stop ali, alvo lá". Rodam sobre candles **fechados**.
@@ -94,6 +124,7 @@ fechamento, proteção ativada.
 | `supertrend` | Virada do Supertrend com o 1h a favor | Reprovada |
 | `bollinger_reversion` | Reversão à média em mercado lateral (ADX baixo) | Reprovada (a pior) |
 | `session_momentum` | Momentum intradiário de BTC/ETH (estudo acadêmico) | Reprovada |
+| `copy_wallet` | Copia as aberturas/fechamentos de um trader da Hyperliquid | Sem backtest; avalie pela análise da carteira e pela demo |
 
 **Nenhuma estratégia tem vantagem comprovada hoje.** Na pesquisa de 2026-10-26 (12 meses, 15 pares, spot e futuros, com taxas e slippage) todas ficaram negativas. Use os robôs para experimentar na conta demo, não como fonte de lucro. Números, causas e próximos testes em [PLANO.md](PLANO.md#resultado-da-pesquisa-2026-10-26-nenhuma-aprovada).
 
@@ -123,5 +154,5 @@ mesmas regras de saída do bot ao vivo e entra na abertura do candle seguinte ao
 pytest
 ```
 
-São 83 testes, sem rede e sem credenciais. Um deles confere que a `ema_cross` gera
+São 97 testes, sem rede e sem credenciais. Um deles confere que a `ema_cross` gera
 **exatamente** os mesmos sinais que a estratégia de produção do `crypto-daytrade`.

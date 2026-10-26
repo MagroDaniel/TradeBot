@@ -23,6 +23,7 @@
       <a href="/bots/{{ b.id }}" class="tab {{ 'active' if page == 'bot' ~ b.id }}"><span class="dot {{ b.state }}"></span>{{ b.name }}</a>
     {% endfor %}
     <a href="/bots/new" class="tab add {{ 'active' if page == 'new' }}">+ Novo robô</a>
+    <a href="/copy" class="tab add {{ 'active' if page == 'copy' }}">Copiar trader</a>
   </nav>
   <main>{% block content %}{% endblock %}</main>
   <div id="toast" class="toast" hidden></div>

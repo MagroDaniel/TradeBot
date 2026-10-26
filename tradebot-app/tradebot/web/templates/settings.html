@@ -35,6 +35,11 @@
     {% for key, spec in strategy.params.items() %}{% set value = params[key] %}
       {% if spec.kind == "bool" %}
         <label class="check"><input type="checkbox" name="param_{{ key }}" {{ "checked" if value }}> {{ spec.label }}</label>
+      {% elif spec.kind == "text" %}
+        <label title="{{ spec.help }}">{{ spec.label }}
+          <input type="text" name="param_{{ key }}" value="{{ value }}" spellcheck="false" autocomplete="off">
+          {% if key == "wallet" and value %}<a class="small" href="/copy/analyze?address={{ value }}">analisar esta carteira</a>{% endif %}
+        </label>
       {% elif spec.kind == "choice" %}
         <label>{{ spec.label }}
           <select name="param_{{ key }}">

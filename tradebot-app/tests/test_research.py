@@ -12,6 +12,6 @@ def test_research_cli_runs_all_strategies_offline(monkeypatch, capsys, tmp_path)
     out = tmp_path / "r.json"
     research.main(["--symbols", "AAAUSDT", "BBBUSDT", "--json", str(out), "--market", "futures", "--market", "spot"])
     text = capsys.readouterr().out
-    for name in research.STRATEGIES:
+    for name in research.CANDLE_STRATEGIES:
         assert name in text
     assert out.exists()

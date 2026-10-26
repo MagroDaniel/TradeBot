@@ -32,6 +32,9 @@ from tradebot.market_data import BinanceMarketData
 from tradebot.models import FUTURES, SPOT, Candle
 from tradebot.paths import data_dir
 from tradebot.strategies import STRATEGIES, get_strategy
+
+# copy trading não tem backtest por candles (a análise é a do histórico da carteira copiada)
+CANDLE_STRATEGIES = sorted(name for name, s in STRATEGIES.items() if s.kind == "candles")
 from tradebot.strategies.base import TIMEFRAME_MINUTES
 
 DEFAULT_SYMBOLS = [
@@ -184,7 +187,7 @@ def print_table(results: list[dict], parts: int) -> None:
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--strategy", choices=sorted(STRATEGIES), action="append",
+    ap.add_argument("--strategy", choices=CANDLE_STRATEGIES, action="append",
                     help="pode repetir; default = todas")
     ap.add_argument("--market", choices=[SPOT, FUTURES], action="append", help="default = futures")
     ap.add_argument("--days", type=int, default=365)
@@ -203,7 +206,7 @@ def main(argv=None) -> None:
     data_cache: dict = {}
     results = []
     for market in args.market or [FUTURES]:
-        for name in args.strategy or list(STRATEGIES):
+        for name in args.strategy or CANDLE_STRATEGIES:
             strategy = get_strategy(name)
             own = {k: v for k, v in overrides.items() if k in strategy.params}
             print(f"→ {name} ({market}) {own or ''}")

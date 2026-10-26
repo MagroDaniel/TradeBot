@@ -19,6 +19,10 @@ Visão de uso em `README.md`; fases, decisões e pesquisa de estratégias em `PL
 - **Vários robôs** (pedido do usuário): cada robô = 1 estratégia fixa + config + carteira demo
   própria (`bot_id` em wallets/positions/equity/events). Robôs não dividem saldo nem limite de
   posições, pra comparação justa. Kill switch e PARAR TUDO são globais.
+- **Copy trading via Hyperliquid** (pedido do usuário): posições públicas pela API oficial
+  `api.hyperliquid.xyz/info`, executado nos futuros da Binance. Não usar endpoints não
+  oficiais do ranking da Binance. Copia a 1x (reduz a alavancagem do trader), stop próprio,
+  não copia posições que já existiam ao ligar, falha de leitura nunca fecha posição.
 - **Painel no navegador + processo em segundo plano** (não janela própria): fechar a tela não
   pode deixar posição sem stop. Ver `PLANO.md`.
 
@@ -69,6 +73,19 @@ pytest                             # sem rede, sem credenciais
   - O estado (`stopped`/`running`/`paused`) de cada robô fica na tabela `bots` e é restaurado
     ao reabrir.
   - Erros repetidos são registrados 1x a cada 5 min.
+- `hyperliquid.py`: cliente só leitura (`state`, `fills`, `portfolio`, `leaderboard` do site),
+  `parse_state`, `binance_symbol` (BTC→BTCUSDT, kPEPE→1000PEPEUSDT, `dex:X`→None) e
+  `analyze()` (relatório da carteira).
+- `strategies/copy_wallet.py`: `kind = "copy"` (as demais são `"candles"`); não tem `generate`.
+  O motor desvia pra `Engine._sync_copy` (sem esperar candle; roda a cada ciclo):
+  - saídas quando o trader fecha/inverte (`exit_reason="leader_exit"`);
+  - `Bot.copy_baseline`: moedas que não serão copiadas até o trader fechar e reabrir (as que
+    ele já tinha ao ligar, as que saíram pelo stop, as que tiveram entrada negada);
+  - tamanho: `equity × copy_pct × notional_dele / max(exposição_dele, patrimônio_dele)`, com o
+    teto `max_position_pct` → nunca passa de 1x;
+  - `Position.extra = {"coin", "leader"}` liga a posição à moeda dele;
+  - estado do trader com cache por ciclo (vários robôs na mesma carteira = 1 chamada).
+  - `research.py` ignora estratégias `kind="copy"`.
 - `store.py`: SQLite (WAL) com `kv`, `wallets`, `positions`, `events` (auditoria) e `equity`.
 - `backtest.py`: multi-par no mesmo relógio, entrada na abertura seguinte, HTF só fechado,
   custos por lado.

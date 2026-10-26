@@ -109,7 +109,13 @@ class BotConfig:
         for ok, message in checks:
             if not ok:
                 raise ValueError(message)
-        self.params()  # valida os parâmetros da estratégia
+        params = self.params()  # valida os parâmetros da estratégia
+        if get_strategy(self.strategy).kind == "copy":
+            from tradebot.hyperliquid import valid_address
+            if self.markets[SPOT].enabled:
+                raise ValueError("Copy trading só opera em futuros (o trader copiado pode estar vendido) — desabilite o spot")
+            if params["wallet"] and not valid_address(params["wallet"]):
+                raise ValueError("Carteira inválida: use o endereço completo (0x + 40 caracteres)")
 
 
 @dataclass

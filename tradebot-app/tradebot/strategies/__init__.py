@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from tradebot.strategies.base import Strategy
 from tradebot.strategies.bollinger_reversion import BollingerReversionStrategy
+from tradebot.strategies.copy_wallet import CopyWalletStrategy
 from tradebot.strategies.donchian_breakout import DonchianBreakoutStrategy
 from tradebot.strategies.ema_cross import EmaCrossStrategy
 from tradebot.strategies.session_momentum import SessionMomentumStrategy
@@ -16,6 +17,7 @@ STRATEGIES: dict[str, Strategy] = {
         SupertrendStrategy(),
         BollingerReversionStrategy(),
         SessionMomentumStrategy(),
+        CopyWalletStrategy(),
     )
 }
 

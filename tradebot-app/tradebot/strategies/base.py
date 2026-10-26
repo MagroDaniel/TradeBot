@@ -19,7 +19,7 @@ class Param:
 
     default: Any
     label: str
-    kind: str = "float"  # float | int | bool | choice
+    kind: str = "float"  # float | int | bool | choice | text
     min: float | None = None
     max: float | None = None
     choices: tuple[str, ...] = ()
@@ -30,6 +30,8 @@ class Param:
             if isinstance(raw, str):
                 return raw.strip().lower() in {"1", "true", "on", "sim", "yes"}
             return bool(raw)
+        if self.kind == "text":
+            return str(raw).strip()
         if self.kind == "choice":
             value = str(raw)
             if value not in self.choices:
@@ -49,6 +51,9 @@ TIMEFRAME_MINUTES = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, 
 
 
 class Strategy:
+    # "candles": decide por candles (backtest/pesquisa se aplicam). "copy": segue outra carteira
+    # (o motor usa `engine._sync_copy`, sem `generate`).
+    kind: str = "candles"
     name: str = ""
     label: str = ""
     description: str = ""
