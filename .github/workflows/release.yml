@@ -1,12 +1,15 @@
 name: Release (TradeBot.exe)
 
-# Gera o executável do Windows e publica uma Release quando uma tag de versão é enviada:
-#   git tag v0.2.0 && git push origin v0.2.0
-# A tag tem que bater com `__version__` em tradebot/__init__.py, e o CHANGELOG.md precisa ter
+# Gera o executável do Windows e publica uma Release. Dois jeitos de disparar:
+#   - enviar uma tag de versão: git tag v0.2.0 && git push origin v0.2.0
+#   - aba Actions do GitHub → "Release (TradeBot.exe)" → Run workflow: usa a versão do código
+#     (`__version__`) e cria a tag v<versão> no commit escolhido.
+# A versão tem que bater com `__version__` em tradebot/__init__.py, e o CHANGELOG.md precisa ter
 # uma seção "## v0.2.0" (vira o texto da release e as notas no botão "Atualizar" do painel).
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -27,8 +30,19 @@ jobs:
       - name: Testes
         run: pytest -q
 
+      - name: Tag da release
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") { $tag = "${{ github.ref_name }}" }
+          else { $tag = "v" + (python -c "import tradebot; print(tradebot.__version__)") }
+          git fetch --tags --quiet
+          if ("${{ github.ref_type }}" -ne "tag" -and (git tag -l $tag)) {
+            Write-Error "A versao $tag ja foi publicada: suba __version__ e o CHANGELOG antes"; exit 1
+          }
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Versão da tag = versão do código
-        run: python scripts/release_notes.py "${{ github.ref_name }}" > release_notes.md
+        run: python scripts/release_notes.py "${{ env.TAG }}" > release_notes.md
 
       - name: Gerar TradeBot.exe
         run: pyinstaller --noconfirm TradeBot.spec
@@ -49,7 +63,9 @@ jobs:
       - name: Publicar release
         uses: softprops/action-gh-release@v2
         with:
-          name: TradeBot ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: TradeBot ${{ env.TAG }}
           body_path: release_notes.md
           files: |
             dist/TradeBot.exe

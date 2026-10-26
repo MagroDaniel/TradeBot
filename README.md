@@ -177,7 +177,8 @@ Os testes também rodam no GitHub a cada push (`.github/workflows/tests.yml`).
 Para publicar uma versão nova do `.exe`:
 1. Suba `__version__` em `tradebot/__init__.py` (ex: `0.2.0`).
 2. Escreva a seção `## v0.2.0` no `CHANGELOG.md`.
-3. Faça commit e envie a tag: `git tag v0.2.0 && git push origin v0.2.0`.
+3. Faça commit e envie a tag (`git tag v0.2.0 && git push origin v0.2.0`), **ou** no GitHub vá
+   em Actions → "Release (TradeBot.exe)" → **Run workflow** (cria a tag sozinho a partir da versão).
 
 O GitHub (`.github/workflows/release.yml`) roda os testes num Windows, gera o `TradeBot.exe`
 com o PyInstaller (`TradeBot.spec`), faz o autoteste do executável e publica a release com o
