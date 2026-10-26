@@ -3,5 +3,5 @@
 Ver README.md (uso), CLAUDE.md (arquitetura) e PLANO.md (fases e pesquisa) na raiz do repositório.
 """
 
-__version__ = "0.1.0"  # a tag da release (vX.Y.Z) tem que bater com isto — o workflow confere
+__version__ = "0.1.1"  # a tag da release (vX.Y.Z) tem que bater com isto — o workflow confere
 GITHUB_REPO = "MagroDaniel/TradeBot"

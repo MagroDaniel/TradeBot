@@ -28,6 +28,8 @@ def section(changelog: str, tag: str) -> str | None:
 
 
 def main(tag: str) -> int:
+    # no Windows a saída padrão é cp1252: sem isto a acentuação da release sai quebrada
+    sys.stdout.reconfigure(encoding="utf-8")
     if tag != f"v{__version__}":
         print(f"Tag {tag} não bate com __version__ = {__version__} (tradebot/__init__.py)", file=sys.stderr)
         return 1

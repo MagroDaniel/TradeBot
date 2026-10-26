@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.helpers import FakeMarketData
+from tradebot import __version__
 from tradebot.engine import Engine
 from tradebot.store import Store
 from tradebot.updater import Release, UpdateManager, latest_release, parse_version, updater_script
@@ -141,7 +142,7 @@ def test_panel_banner_and_install(tmp_path, monkeypatch):
     client.cookies.set("tradebot_token", "t")
     banner = client.get("/partials/update").text
     assert "Nova versão 0.2.0" in banner and "Atualizar" in banner and "novidade" in banner
-    assert "v0.1.0" in client.get("/").text  # versão do app aparece no topo
+    assert f"v{__version__}" in client.get("/").text  # versão do app aparece no topo
     r = client.post("/api/update/install")
     assert r.status_code == 200 and "reabrir" in r.text
     assert calls["shutdown"] == 1

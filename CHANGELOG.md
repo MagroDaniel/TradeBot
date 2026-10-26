@@ -3,6 +3,11 @@
 Cada versão publicada tem uma seção `## vX.Y.Z`; o texto dela vira a página da release e as
 notas que aparecem no botão "Atualizar" do painel.
 
+## v0.1.1
+
+- Corrige a acentuação das notas da versão (na v0.1.0 apareciam caracteres quebrados).
+- Primeira atualização publicada: quem estiver na v0.1.0 vê a faixa "Nova versão" no topo do painel e pode atualizar pelo botão.
+
 ## v0.1.0
 
 Primeira versão do TradeBot como aplicativo do Windows.
