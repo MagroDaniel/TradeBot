@@ -1,39 +1,28 @@
+{% include "partials/global_alerts.html" %}
 <div class="status-bar card">
   <div class="status-main">
     <span class="dot {{ state }}"></span>
     <div>
-      <div class="status-title">{{ STATE_LABELS[state] }}</div>
-      <div class="muted small">{{ strategy }} · último ciclo {{ last_tick | time }}</div>
+      <div class="status-title">{{ bot.name }} · {{ STATE_LABELS[state] }}</div>
+      <div class="muted small">{{ strategy_label }}{% if bot.config.strategy not in VALIDATED %} <span class="badge">em teste</span>{% endif %} · último ciclo {{ last_tick | time }} · <a href="/bots/{{ bot.id }}/settings">configurações</a></div>
     </div>
   </div>
   <div class="controls">
     {% if state != "running" %}
-      <button class="btn primary" hx-post="/api/start">▶ Ligar</button>
+      <button class="btn primary" hx-post="/api/bots/{{ bot.id }}/start">▶ Ligar</button>
     {% endif %}
     {% if state == "running" %}
-      <button class="btn" hx-post="/api/pause" title="Continua cuidando das posições abertas (stop, alvo, trailing), mas não abre novas">⏸ Parar novas entradas</button>
+      <button class="btn" hx-post="/api/bots/{{ bot.id }}/pause" title="Continua cuidando das posições abertas (stop, alvo, trailing), mas não abre novas">⏸ Parar novas entradas</button>
     {% endif %}
     {% if state != "stopped" %}
-      <button class="btn" hx-post="/api/stop"
-        {% if has_open %}hx-confirm="Há posições abertas. Desligado, o bot NÃO vai gerenciar stop/alvo delas. Prefira 'Parar novas entradas'. Desligar mesmo assim?"{% endif %}>■ Desligar</button>
+      <button class="btn" hx-post="/api/bots/{{ bot.id }}/stop"
+        {% if has_open %}hx-confirm="Há posições abertas. Desligado, o robô NÃO vai gerenciar stop/alvo delas. Prefira 'Parar novas entradas'. Desligar mesmo assim?"{% endif %}>■ Desligar</button>
     {% endif %}
-    <button class="btn danger" hx-post="/api/emergency" hx-confirm="Fechar TODAS as posições a mercado e bloquear novas entradas?">⛔ PARAR TUDO</button>
   </div>
 </div>
 
-{% if halted %}
-<div class="alert danger">
-  Kill switch acionado: nenhuma entrada nova será feita até liberar.
-  <button class="btn small" hx-post="/api/release-halt" hx-confirm="Liberar o kill switch?">Liberar</button>
-</div>
-{% endif %}
-{% if stale %}
-<div class="alert warn">O motor não completa um ciclo há algum tempo — verifique a internet. Último erro: {{ last_error or "—" }}</div>
-{% elif last_error %}
-<div class="alert muted small">Último erro: {{ last_error }}</div>
-{% endif %}
 {% if state == "stopped" and has_open %}
-<div class="alert warn">Bot desligado com posições abertas: stop, alvo e trailing NÃO estão sendo monitorados.</div>
+<div class="alert warn">Robô desligado com posições abertas: stop, alvo e trailing NÃO estão sendo monitorados.</div>
 {% endif %}
 
 <div class="market-cards">
@@ -52,11 +41,11 @@
     </div>
     {% if m.protection %}
       <div class="alert warn small">🛡 {{ m.protection }}
-        {% if "Drawdown" in m.protection %}<button class="btn small" hx-post="/api/protection/{{ m.market }}/release" hx-confirm="Liberar a proteção de drawdown?">Liberar</button>{% endif %}
+        {% if "Drawdown" in m.protection %}<button class="btn small" hx-post="/api/bots/{{ bot.id }}/protection/{{ m.market }}/release" hx-confirm="Liberar a proteção de drawdown?">Liberar</button>{% endif %}
       </div>
     {% endif %}
     <div class="muted small">Caixa livre: {{ "%.2f"|format(m.cash) }} · inicial {{ "%.0f"|format(m.initial) }} ·
-      <a href="#" hx-post="/api/wallet/{{ m.market }}/reset" hx-confirm="Zerar a carteira demo de {{ MARKET_LABELS[m.market] }} e apagar o histórico dela?">resetar carteira demo</a></div>
+      <a href="#" hx-post="/api/bots/{{ bot.id }}/wallet/{{ m.market }}/reset" hx-confirm="Zerar a carteira demo de {{ MARKET_LABELS[m.market] }} deste robô e apagar o histórico dela?">resetar carteira demo</a></div>
   </div>
 {% endfor %}
 </div>

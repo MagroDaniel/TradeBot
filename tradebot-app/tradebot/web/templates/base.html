@@ -11,11 +11,19 @@
 <body>
   <header class="topbar">
     <div class="brand">TradeBot <span class="badge demo">CONTA DEMO</span></div>
-    <nav>
-      <a href="/" class="{{ 'active' if page == 'dashboard' }}">Painel</a>
-      <a href="/settings" class="{{ 'active' if page == 'settings' }}">Configurações</a>
-    </nav>
+    <div class="top-actions">
+      <a href="/settings" class="icon-link {{ 'active' if page == 'app_settings' }}" title="Configurações gerais">⚙</a>
+      <button class="btn danger small" hx-post="/api/emergency"
+        hx-confirm="Fechar TODAS as posições de TODOS os robôs a mercado e bloquear novas entradas?">⛔ PARAR TUDO</button>
+    </div>
   </header>
+  <nav class="tabs">
+    <a href="/" class="tab {{ 'active' if page == 'overview' }}">Visão geral</a>
+    {% for b in nav_bots() %}
+      <a href="/bots/{{ b.id }}" class="tab {{ 'active' if page == 'bot' ~ b.id }}"><span class="dot {{ b.state }}"></span>{{ b.name }}</a>
+    {% endfor %}
+    <a href="/bots/new" class="tab add {{ 'active' if page == 'new' }}">+ Novo robô</a>
+  </nav>
   <main>{% block content %}{% endblock %}</main>
   <div id="toast" class="toast" hidden></div>
   <script>

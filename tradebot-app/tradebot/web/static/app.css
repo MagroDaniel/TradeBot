@@ -44,7 +44,7 @@ code { background: #0b0f15; padding: 1px 5px; border-radius: 4px; }
 .dot.paused { background: var(--warn); }
 .controls { display: flex; gap: 8px; flex-wrap: wrap; }
 
-#status { display: flex; flex-direction: column; gap: 12px; }
+
 .market-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; }
 .market.disabled { opacity: .5; }
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
@@ -94,3 +94,21 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 }
 .grid-2 > *, .market-cards > * { min-width: 0; }  /* deixa a tabela rolar dentro do card em vez de alargar a página */
 .events li { overflow-wrap: anywhere; }
+
+/* abas de robôs */
+.top-actions { display: flex; align-items: center; gap: 12px; }
+.icon-link { color: var(--muted); font-size: 18px; }
+.icon-link.active, .icon-link:hover { color: var(--text); text-decoration: none; }
+.tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--border); overflow-x: auto;
+  background: var(--panel); }
+.tab { padding: 8px 14px; border-radius: 8px 8px 0 0; color: var(--muted); white-space: nowrap; display: flex;
+  align-items: center; gap: 6px; border: 1px solid transparent; border-bottom: none; }
+.tab:hover { color: var(--text); text-decoration: none; }
+.tab.active { color: var(--text); background: var(--bg); border-color: var(--border); font-weight: 600; }
+.tab.add { color: var(--primary); }
+.tab .dot, .dot.inline { width: 8px; height: 8px; box-shadow: none; display: inline-block; margin-right: 6px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.nowrap { white-space: nowrap; }
+.warn-text { color: var(--warn); }
+.param-grid.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+td.wrap { white-space: normal; min-width: 170px; max-width: 260px; }

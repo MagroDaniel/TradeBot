@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from tradebot.models import Position, Signal
-from tradebot.settings import Settings
+from tradebot.settings import BotConfig
 
 STOP_REASONS = {"stop_loss"}
 
@@ -53,7 +53,7 @@ def clear_halt(data_dir: Path) -> None:
 
 
 # --- proteções (só bloqueiam ENTRADA) ---
-def active_protection(settings: Settings, closed_today_and_recent: list[Position], equity: float,
+def active_protection(settings: BotConfig, closed_today_and_recent: list[Position], equity: float,
                       peak_equity: float, day_start_equity: float, now_ms: int) -> str | None:
     """Motivo do bloqueio global de entradas num mercado, ou None se liberado.
 
@@ -86,13 +86,13 @@ def active_protection(settings: Settings, closed_today_and_recent: list[Position
     return None
 
 
-def symbol_in_cooldown(settings: Settings, symbol: str, recent_closed: list[Position], now_ms: int) -> bool:
+def symbol_in_cooldown(settings: BotConfig, symbol: str, recent_closed: list[Position], now_ms: int) -> bool:
     limit = settings.protections.symbol_cooldown_min * 60_000
     return any(p.symbol == symbol and now_ms - p.closed_at_ms < limit for p in recent_closed)
 
 
 # --- tamanho da posição ---
-def position_size(signal: Signal, equity: float, cash: float, settings: Settings) -> float:
+def position_size(signal: Signal, equity: float, cash: float, settings: BotConfig) -> float:
     """Quantidade tal que bater o stop custe `risk_per_trade_pct` do patrimônio, limitada pelo
     tamanho máximo da posição e pelo caixa disponível (sem alavancagem: nunca mais que o caixa)."""
     risk_per_unit = signal.risk_per_unit
@@ -103,7 +103,7 @@ def position_size(signal: Signal, equity: float, cash: float, settings: Settings
     return max(0.0, min(qty, max_notional / signal.entry))
 
 
-def check_entry(signal: Signal, market: str, settings: Settings, open_positions: list[Position],
+def check_entry(signal: Signal, market: str, settings: BotConfig, open_positions: list[Position],
                 trades_today: int) -> Decision:
     """Limites estruturais (não dependem de saldo). Tamanho é calculado depois, no motor."""
     r = settings.risk

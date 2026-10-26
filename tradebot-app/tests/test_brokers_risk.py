@@ -5,7 +5,7 @@ from tradebot import risk
 from tradebot.brokers import OrderRejected, PaperBroker, simulate_market_fill
 from tradebot.market_data import OrderBook, SymbolRules
 from tradebot.models import ExitPlan, Signal
-from tradebot.settings import Settings
+from tradebot.settings import BotConfig as Settings
 from tradebot.store import Store
 
 
@@ -148,7 +148,7 @@ def test_settings_roundtrip_and_validation():
     s.strategy_params = {"ema_cross": {"atr_stop": 2}}
     again = Settings.from_dict(s.to_dict())
     assert again.risk.risk_per_trade_pct == 0.5
-    assert again.params_for()["atr_stop"] == 2
+    assert again.params()["atr_stop"] == 2
     bad = s.to_dict()
     bad["risk"]["risk_per_trade_pct"] = 50
     with pytest.raises(ValueError):

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="/static/vendor/lightweight-charts-4.2.0.js"></script>
+{% endblock %}
+{% block content %}
+<section hx-get="/partials/overview" hx-trigger="load, every 5s, refresh from:body"></section>
+
+<section class="card">
+  <div class="card-head"><h2>Retorno de cada robô (%)</h2></div>
+  <div id="cmp-chart" class="chart" style="height: 300px"></div>
+  <p class="muted small">Cada robô tem carteira demo própria, então a comparação é justa: um não ocupa a vaga nem o saldo do outro. Retorno sobre o saldo inicial, incluindo o resultado das posições abertas.</p>
+</section>
+
+<script>
+  (function () {
+    const palette = ["#4f9cf9", "#f0b90b", "#26a69a", "#ef5350", "#ab47bc", "#ff7043", "#8d6e63", "#26c6da", "#d4e157", "#ec407a"];
+    const el = document.getElementById("cmp-chart");
+    const chart = LightweightCharts.createChart(el, {
+      height: 300,
+      layout: { background: { color: "transparent" }, textColor: "#9aa4b2" },
+      grid: { vertLines: { color: "#1f2633" }, horzLines: { color: "#1f2633" } },
+      timeScale: { timeVisible: true },
+      localization: { priceFormatter: (v) => v.toFixed(2) + "%" },
+    });
+    const series = {};
+    async function load() {
+      const data = await fetch("/api/equity/overview").then((r) => r.json());
+      data.forEach((bot, i) => {
+        if (!series[bot.id]) {
+          series[bot.id] = chart.addLineSeries({ color: palette[i % palette.length], lineWidth: 2, title: bot.name });
+        }
+        series[bot.id].setData(bot.points);
+      });
+    }
+    load();
+    setInterval(load, 60000);
+    new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth })).observe(el);
+  })();
+</script>
+{% endblock %}

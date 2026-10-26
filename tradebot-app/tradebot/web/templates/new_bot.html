@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+{% if error %}<div class="alert danger">Não criou: {{ error }}</div>{% endif %}
+<form method="post" action="/bots" class="settings">
+  <section class="card">
+    <h2>Novo robô</h2>
+    <p class="muted small">Cada robô roda uma estratégia, com carteira demo, pares, risco e proteções próprios. Para comparar duas versões da mesma estratégia (ex: alvo 2R × trailing), crie dois robôs com a mesma estratégia e parâmetros diferentes.</p>
+    <div class="param-grid wide">
+      <label>Nome<input type="text" name="name" maxlength="40" placeholder="ex: Donchian 1h"></label>
+      <label>Estratégia
+        <select name="strategy">
+          {% for name, st in STRATEGIES.items() %}
+          <option value="{{ name }}">{{ st.label }}{% if name not in VALIDATED %} (em teste){% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Copiar mercados, pares, risco e proteções de
+        <select name="copy_from">
+          <option value="">(padrão)</option>
+          {% for b in nav_bots() %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    {% for name, st in STRATEGIES.items() %}
+      <p class="muted small"><b>{{ st.label }}:</b> {{ st.description }}</p>
+    {% endfor %}
+  </section>
+  <div class="form-actions"><button class="btn primary" type="submit">Criar robô</button></div>
+</form>
+{% endblock %}

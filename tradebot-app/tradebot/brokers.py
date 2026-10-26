@@ -51,23 +51,26 @@ def simulate_market_fill(book: OrderBook, buy: bool, qty: float) -> float:
 
 
 class PaperBroker:
-    """Conta demo local: preço e livro de ofertas reais, dinheiro de mentira."""
+    """Conta demo local: preço e livro de ofertas reais, dinheiro de mentira. Uma carteira por
+    (robô, mercado) — robôs diferentes nunca dividem saldo."""
 
     account = "paper"
 
-    def __init__(self, market: str, store, market_data, fee_rate: float, max_slippage: float = 0.005) -> None:
+    def __init__(self, market: str, store, market_data, fee_rate: float, max_slippage: float = 0.005,
+                 bot_id: int = 1) -> None:
         self.market = market
+        self.bot_id = bot_id
         self.store = store
         self.data = market_data
         self.fee_rate = fee_rate
         self.max_slippage = max_slippage
 
     def ensure_wallet(self, initial: float) -> None:
-        if self.store.get_wallet(self.account, self.market) is None:
-            self.store.reset_wallet(self.account, self.market, initial)
+        if self.store.get_wallet(self.account, self.bot_id, self.market) is None:
+            self.store.reset_wallet(self.account, self.bot_id, self.market, initial)
 
     def cash(self) -> float:
-        wallet = self.store.get_wallet(self.account, self.market)
+        wallet = self.store.get_wallet(self.account, self.bot_id, self.market)
         return wallet["cash"] if wallet else 0.0
 
     def equity(self, positions: list[Position], prices: dict[str, float]) -> float:
@@ -88,7 +91,7 @@ class PaperBroker:
         fee = notional * self.fee_rate
         if notional + fee > self.cash() + 1e-9:
             raise OrderRejected(f"Saldo insuficiente: precisa {notional + fee:.2f}, tem {self.cash():.2f}")
-        self.store.add_cash(self.account, self.market, -(notional + fee))
+        self.store.add_cash(self.account, self.bot_id, self.market, -(notional + fee))
         return Fill(price, qty, fee)
 
     def close(self, position: Position) -> Fill:
@@ -97,5 +100,5 @@ class PaperBroker:
         price = simulate_market_fill(book, buy=position.direction != LONG, qty=position.qty)
         fee = position.qty * price * self.fee_rate
         margin = position.qty * position.entry_price
-        self.store.add_cash(self.account, self.market, margin + position.gross_pnl(price) - fee)
+        self.store.add_cash(self.account, self.bot_id, self.market, margin + position.gross_pnl(price) - fee)
         return Fill(price, position.qty, fee)

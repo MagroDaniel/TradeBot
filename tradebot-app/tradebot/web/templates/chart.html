@@ -6,7 +6,7 @@
 <section class="card">
   <div class="card-head">
     <h2>{{ p.symbol }} · {{ MARKET_LABELS[p.market] }} · {{ "Compra" if p.direction == "long" else "Venda" }}</h2>
-    <a href="/" class="btn small">← Voltar</a>
+    <a href="/bots/{{ bot_id }}" class="btn small">← Voltar</a>
   </div>
   <p class="muted">{{ p.reason }}</p>
   <div id="price-chart" class="chart tall"></div>

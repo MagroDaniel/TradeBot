@@ -1,0 +1,37 @@
+<div class="stack">
+{% include "partials/global_alerts.html" %}
+<section class="card">
+  <div class="card-head">
+    <h2>Comparação dos robôs</h2>
+    <span class="muted small">último ciclo {{ last_tick | time }}</span>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Robô</th><th>Estratégia</th><th>Mercados</th><th>Estado</th><th>Patrimônio</th><th>Retorno</th><th>Resultado</th><th>Operações</th><th>Acerto</th><th>R médio</th><th>Abertas</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><a href="/bots/{{ r.bot.id }}"><b>{{ r.bot.name }}</b></a></td>
+        <td class="wrap">{{ STRATEGIES[r.strategy].label }}{% if r.strategy not in VALIDATED %} <span class="badge">em teste</span>{% endif %}</td>
+        <td>{{ r.markets }}</td>
+        <td><span class="dot inline {{ r.state }}"></span>{{ STATE_LABELS[r.state] }}
+          {% if r.protection %}<div class="small warn-text" title="{{ r.protection }}">🛡 proteção ativa</div>{% endif %}</td>
+        <td>{{ "%.2f"|format(r.equity) }}</td>
+        <td class="{{ 'pos' if r.return_pct >= 0 else 'neg' }}">{{ "%+.2f"|format(r.return_pct) }}%</td>
+        <td class="{{ 'pos' if r.pnl >= 0 else 'neg' }}">{{ "%+.2f"|format(r.pnl) }}</td>
+        <td>{{ r.trades }}</td>
+        <td>{% if r.win_rate is not none %}{{ "%.0f"|format(r.win_rate) }}%{% else %}—{% endif %}</td>
+        <td class="{{ 'pos' if (r.avg_r or 0) >= 0 else 'neg' }}">{% if r.avg_r is not none %}{{ "%+.2f"|format(r.avg_r) }}R{% else %}—{% endif %}</td>
+        <td>{{ r.open }}</td>
+        <td class="nowrap">
+          {% if r.state != "running" %}<button class="btn small primary" hx-post="/api/bots/{{ r.bot.id }}/start">Ligar</button>{% endif %}
+          {% if r.state == "running" %}<button class="btn small" hx-post="/api/bots/{{ r.bot.id }}/pause" title="Parar novas entradas (continua gerenciando as abertas)">Pausar</button>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Poucas operações não dizem nada: compare só depois de dezenas de trades por robô. "R médio" = resultado médio por operação em unidades de risco (acima de 0 = estratégia lucrativa depois das taxas).</p>
+</section>
+</div>

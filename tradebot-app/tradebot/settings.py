@@ -1,8 +1,12 @@
-"""Configurações editáveis pelo painel, persistidas no SQLite (`kv['settings']`).
+"""Configurações: globais do app (`AppSettings`) e de cada robô (`BotConfig`).
 
-Defaults conservadores: só conta demo, risco de 1% do patrimônio por trade, no máximo 3
-posições por mercado, e proteções ligadas (perda diária, sequência de stops, cooldown,
-drawdown) — inspiradas nas `protections` do Freqtrade.
+Cada robô é uma estratégia com seus parâmetros, pares, risco, proteções e carteira demo
+PRÓPRIA — vários robôs rodando ao mesmo tempo nunca dividem saldo nem limite de posições, então
+dá pra comparar estratégias lado a lado de forma justa (um não "rouba" a vaga do outro).
+
+Defaults conservadores: risco de 1% do patrimônio por trade, no máximo 3 posições por
+mercado, e proteções ligadas (perda diária, sequência de stops, cooldown, drawdown) —
+inspiradas nas `protections` do Freqtrade.
 """
 from __future__ import annotations
 
@@ -13,6 +17,7 @@ from tradebot.models import FUTURES, MARKETS, SPOT
 from tradebot.strategies import DEFAULT_STRATEGY, STRATEGIES, get_strategy
 
 ACCOUNTS = ("paper",)  # "demo" (Binance Demo Mode) e "live" entram nas próximas fases
+MAX_BOTS = 10
 
 
 @dataclass
@@ -43,48 +48,49 @@ class ProtectionSettings:
 
 
 @dataclass
-class Settings:
-    account: str = "paper"
+class BotConfig:
+    name: str = "EMA 9/21 (produção)"
+    strategy: str = DEFAULT_STRATEGY
+    strategy_params: dict[str, Any] = field(default_factory=dict)  # só os da estratégia deste robô
     markets: dict[str, MarketSettings] = field(default_factory=lambda: {
         SPOT: MarketSettings(fee_rate=0.001),
         FUTURES: MarketSettings(fee_rate=0.0005),
     })
     top_symbols: int = 25
     symbols: list[str] = field(default_factory=list)  # se preenchido, substitui o top-N
-    strategy: str = DEFAULT_STRATEGY
-    strategy_params: dict[str, dict[str, Any]] = field(default_factory=dict)
     risk: RiskSettings = field(default_factory=RiskSettings)
     protections: ProtectionSettings = field(default_factory=ProtectionSettings)
-    poll_seconds: int = 10
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict | None) -> "Settings":
+    def from_dict(cls, data: dict | None) -> "BotConfig":
         """Tolerante a config antiga: campo desconhecido é ignorado, faltante usa default."""
         data = data or {}
-        s = cls()
-        if data.get("account") in ACCOUNTS:
-            s.account = data["account"]
+        c = cls()
+        if str(data.get("name", "")).strip():
+            c.name = str(data["name"]).strip()[:40]
+        if data.get("strategy") in STRATEGIES:
+            c.strategy = data["strategy"]
+        params = data.get("strategy_params") or {}
+        # formato da versão 1 (um app = uma estratégia): {nome_estrategia: {params}}
+        if c.strategy in params and isinstance(params[c.strategy], dict):
+            params = params[c.strategy]
+        c.strategy_params = {k: v for k, v in params.items() if k in get_strategy(c.strategy).params}
         for market, raw in (data.get("markets") or {}).items():
             if market in MARKETS:
-                s.markets[market] = _fill(MarketSettings(fee_rate=s.markets[market].fee_rate), raw)
-        for key in ("top_symbols", "poll_seconds"):
-            if key in data:
-                setattr(s, key, int(data[key]))
-        s.symbols = [str(x).upper().strip() for x in data.get("symbols") or [] if str(x).strip()]
-        if data.get("strategy") in STRATEGIES:
-            s.strategy = data["strategy"]
-        s.strategy_params = {k: dict(v) for k, v in (data.get("strategy_params") or {}).items() if k in STRATEGIES}
-        s.risk = _fill(RiskSettings(), data.get("risk") or {})
-        s.protections = _fill(ProtectionSettings(), data.get("protections") or {})
-        s.validate()
-        return s
+                c.markets[market] = _fill(MarketSettings(fee_rate=c.markets[market].fee_rate), raw)
+        if "top_symbols" in data:
+            c.top_symbols = int(data["top_symbols"])
+        c.symbols = [str(x).upper().strip() for x in data.get("symbols") or [] if str(x).strip()]
+        c.risk = _fill(RiskSettings(), data.get("risk") or {})
+        c.protections = _fill(ProtectionSettings(), data.get("protections") or {})
+        c.validate()
+        return c
 
-    def params_for(self, strategy_name: str | None = None) -> dict[str, Any]:
-        name = strategy_name or self.strategy
-        return get_strategy(name).resolve(self.strategy_params.get(name))
+    def params(self) -> dict[str, Any]:
+        return get_strategy(self.strategy).resolve(self.strategy_params)
 
     def validate(self) -> None:
         r, pr = self.risk, self.protections
@@ -96,7 +102,6 @@ class Settings:
             (0 < r.max_slippage_pct <= 5, "Slippage máximo deve ficar entre 0 e 5%"),
             (pr.daily_loss_limit_pct > 0 and pr.max_drawdown_pct > 0, "Limites de perda devem ser > 0"),
             (1 <= self.top_symbols <= 100, "Quantidade de pares deve ficar entre 1 e 100"),
-            (3 <= self.poll_seconds <= 300, "Intervalo do ciclo deve ficar entre 3 e 300 s"),
             (any(m.enabled for m in self.markets.values()), "Habilite pelo menos um mercado"),
             (all(m.initial_balance > 0 and 0 <= m.fee_rate < 0.01 for m in self.markets.values()),
              "Saldo inicial deve ser > 0 e taxa < 1%"),
@@ -104,7 +109,28 @@ class Settings:
         for ok, message in checks:
             if not ok:
                 raise ValueError(message)
-        self.params_for()  # valida os parâmetros da estratégia ativa
+        self.params()  # valida os parâmetros da estratégia
+
+
+@dataclass
+class AppSettings:
+    account: str = "paper"
+    poll_seconds: int = 10
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "AppSettings":
+        data = data or {}
+        s = cls()
+        if data.get("account") in ACCOUNTS:
+            s.account = data["account"]
+        if "poll_seconds" in data:
+            s.poll_seconds = int(float(data["poll_seconds"]))
+        if not 3 <= s.poll_seconds <= 300:
+            raise ValueError("Intervalo do ciclo deve ficar entre 3 e 300 s")
+        return s
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 def _fill(obj, raw: dict):
@@ -119,12 +145,3 @@ def _fill(obj, raw: dict):
                 value = float(value)
             setattr(obj, key, value)
     return obj
-
-
-def load_settings(store) -> Settings:
-    return Settings.from_dict(store.get_json("settings"))
-
-
-def save_settings(store, settings: Settings) -> None:
-    settings.validate()
-    store.set_json("settings", settings.to_dict())

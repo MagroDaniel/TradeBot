@@ -14,6 +14,9 @@ Visão de uso em `README.md`; fases, decisões e pesquisa de estratégias em `PL
 - **Estratégia nova só entra em uso depois de `python -m tradebot.research`** com R positivo
   em todas as fatias. Só `ema_cross` está validada (herdada do crypto-daytrade).
 - **Sistema próprio**, sem copiar código GPL (Freqtrade/OctoBot); só ideias.
+- **Vários robôs** (pedido do usuário): cada robô = 1 estratégia fixa + config + carteira demo
+  própria (`bot_id` em wallets/positions/equity/events). Robôs não dividem saldo nem limite de
+  posições, pra comparação justa. Kill switch e PARAR TUDO são globais.
 - **Painel no navegador + processo em segundo plano** (não janela própria): fechar a tela não
   pode deixar posição sem stop. Ver `PLANO.md`.
 
@@ -51,10 +54,18 @@ pytest                             # sem rede, sem credenciais
   slippage/saldo só na entrada).
   - Brokers futuros (Binance Demo, real) devem manter a mesma interface: `open`, `close`,
     `cash`, `equity`, `ensure_wallet`.
-- `engine.py`: thread com `tick()` a cada `poll_seconds`.
-  - Ordem: gerenciar posições → detectar candle fechado → `should_exit` → escanear entradas.
+- `settings.py`: `AppSettings` (global: conta, `poll_seconds`, no kv `app_settings`) e
+  `BotConfig` (por robô, na tabela `bots`). `BotConfig.from_dict` aceita o formato da versão 1
+  (`strategy_params` aninhado por estratégia).
+- `engine.py`: thread com `tick()` a cada `poll_seconds`; `Engine.bots: dict[int, Bot]`.
+  - Por ciclo: preços 1x por mercado; candles com cache por ciclo (`_candle_cache`) compartilhado
+    entre robôs (pede 502–1000 candles e fatia o `warmup` de cada estratégia).
+  - Por robô/mercado: gerenciar posições → detectar candle fechado → `should_exit` → escanear.
+  - Primeira execução sem robôs cria o robô 1 a partir de `kv['settings']`/`kv['engine_state']`
+    da versão 1 (migração; `Store._migrate_v1` adiciona `bot_id` às tabelas antigas).
   - O primeiro candle depois de ligar é ignorado (não entra em sinal velho).
-  - O estado (`stopped`/`running`/`paused`) fica no kv e é restaurado ao reabrir.
+  - O estado (`stopped`/`running`/`paused`) de cada robô fica na tabela `bots` e é restaurado
+    ao reabrir.
   - Erros repetidos são registrados 1x a cada 5 min.
 - `store.py`: SQLite (WAL) com `kv`, `wallets`, `positions`, `events` (auditoria) e `equity`.
 - `backtest.py`: multi-par no mesmo relógio, entrada na abertura seguinte, HTF só fechado,
@@ -64,7 +75,9 @@ pytest                             # sem rede, sem credenciais
   `<dados>/cache`.
   - Universo fixo de pares líquidos, para evitar viés de sobrevivência.
   - Timestamps do arquivo spot desde 2025 vêm em microssegundos (`_to_ms`).
-- `web/server.py`: FastAPI + Jinja + htmx.
+- `web/server.py`: FastAPI + Jinja + htmx. Rotas: `/` (visão geral), `/bots/{id}` (aba do
+  robô), `/bots/{id}/settings`, `/bots/new`, `/settings` (global), comandos em
+  `/api/bots/{id}/...`, `/api/emergency` e `/api/release-halt` globais.
   - Token por execução, trocado por cookie HttpOnly SameSite=Strict; tudo exige o cookie,
     menos `/health` e `/static`.
   - Comandos respondem 204 com `HX-Trigger` (`refresh` + `toast`).

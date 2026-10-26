@@ -5,7 +5,7 @@ sozinho** numa **conta demo** e mostra tudo num painel no navegador: saldo, posi
 histórico completo (inclusive as perdas), log de cada decisão, parâmetros editáveis e um botão
 de pânico.
 
-> **Status (2026-10-26): Fases 0–2 do [PLANO.md](PLANO.md).** Só existe a conta demo local
+> **Status (2026-10-26): Fases 0–2 do [PLANO.md](PLANO.md), com vários robôs simultâneos.** Só existe a conta demo local
 > (preço real da Binance, dinheiro de mentira). Binance Demo Mode, o `.exe` e a conta real são
 > as próximas fases. **Sem alavancagem, nunca**: spot só compra; futuros operam comprado e
 > vendido a 1x.
@@ -29,26 +29,35 @@ O navegador abre sozinho no painel. Os dados (banco, carteira demo, log) ficam e
 - Rodar `python app.py` de novo com o bot já aberto só abre o painel existente. Duas
   instâncias nunca operam a mesma carteira.
 
-## O painel
+## O painel: vários robôs ao mesmo tempo
+
+Cada **robô** roda uma estratégia, com parâmetros, pares, risco, proteções e **carteira demo
+próprios**. Robôs nunca dividem saldo nem vaga de posição, então dá para comparar
+estratégias (ou duas versões da mesma, ex: alvo fixo × trailing) lado a lado de forma justa.
+
+- **Visão geral**: tabela comparando todos os robôs (patrimônio, retorno, resultado,
+  operações, acerto, R médio, posições abertas) e o gráfico de retorno % de cada um.
+- **Uma aba por robô**: status e botões, carteira spot/futuros, gráfico de patrimônio,
+  posições abertas, histórico completo e log de decisões. As configurações do robô ficam no
+  link "configurações" da aba.
+- **+ Novo robô**: escolhe a estratégia e, opcionalmente, copia mercados, pares, risco e
+  proteções de outro robô. A estratégia de um robô é fixa; para testar outra, crie outro robô.
+  Até 10 robôs.
 
 | Controle | O que faz |
 |---|---|
-| **▶ Ligar** | Começa a operar. Só entra a partir do **próximo** candle fechado, nunca num sinal antigo |
-| **⏸ Parar novas entradas** | Continua cuidando das posições abertas (stop, alvo, trailing), mas não abre novas |
-| **■ Desligar** | Para tudo. Avisa se houver posição aberta, porque ela fica sem stop monitorado |
-| **⛔ PARAR TUDO** | Fecha todas as posições a mercado e aciona o kill switch (bloqueia entradas até você liberar) |
+| **▶ Ligar** (por robô) | Começa a operar. Só entra a partir do **próximo** candle fechado, nunca num sinal antigo |
+| **⏸ Parar novas entradas** (por robô) | Continua cuidando das posições abertas (stop, alvo, trailing), mas não abre novas |
+| **■ Desligar** (por robô) | Para o robô. Avisa se houver posição aberta, porque ela fica sem stop monitorado |
+| **⛔ PARAR TUDO** (topo, global) | Fecha todas as posições de **todos** os robôs a mercado e aciona o kill switch |
 | **Fechar** (por posição) | Fecha uma posição a mercado |
-| **Resetar carteira demo** | Volta ao saldo inicial e apaga o histórico daquele mercado |
+| **Resetar carteira demo** | Volta ao saldo inicial e apaga o histórico daquele robô naquele mercado |
+| **⚙** (topo) | Configurações gerais (intervalo do ciclo) |
 
 Clicar no par abre o gráfico de candles com entrada, stop (atual e inicial), alvo e saída.
 
-**Configurações:**
-- estratégia e todos os parâmetros dela;
-- mercados (spot e/ou futuros), saldo inicial e taxa de cada carteira;
-- pares: top N por volume ou uma lista fixa;
-- risco: % do patrimônio por operação, teto da posição, limites de posições e de operações
-  por dia, slippage máximo;
-- proteções automáticas.
+O motor busca preços e candles **uma vez por ciclo** e compartilha entre os robôs, então ter
+vários ligados não multiplica as chamadas à Binance.
 
 ## Como o bot decide e se protege
 
@@ -114,5 +123,5 @@ mesmas regras de saída do bot ao vivo e entra na abertura do candle seguinte ao
 pytest
 ```
 
-São 74 testes, sem rede e sem credenciais. Um deles confere que a `ema_cross` gera
+São 83 testes, sem rede e sem credenciais. Um deles confere que a `ema_cross` gera
 **exatamente** os mesmos sinais que a estratégia de produção do `crypto-daytrade`.

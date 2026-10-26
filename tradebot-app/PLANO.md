@@ -32,6 +32,8 @@ Freqtrade, Jesse, OctoBot e Nautilus Trader.
   - configurações completas;
   - token de acesso por execução;
   - JS embutido (funciona sem CDN).
+- [x] **Vários robôs simultâneos** (pedido em 2026-10-26): uma aba por robô, cada um com
+      estratégia, parâmetros e carteira demo próprios; visão geral comparando todos.
 - [~] **Fase 4 antecipada (pesquisa)**:
   - [x] backtester genérico com as mesmas regras de saída do motor;
   - [x] 4 estratégias candidatas;

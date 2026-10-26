@@ -1,0 +1,11 @@
+{% if halted %}
+<div class="alert danger">
+  Kill switch acionado: nenhum robô abre posição nova até liberar.
+  <button class="btn small" hx-post="/api/release-halt" hx-confirm="Liberar o kill switch para todos os robôs?">Liberar</button>
+</div>
+{% endif %}
+{% if stale %}
+<div class="alert warn">O motor não completa um ciclo há algum tempo. Verifique a internet. Último erro: {{ last_error or "—" }}</div>
+{% elif last_error %}
+<div class="alert muted small">Último erro: {{ last_error }}</div>
+{% endif %}
