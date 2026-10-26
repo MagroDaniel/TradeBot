@@ -1,0 +1,21 @@
+{% if u.available %}
+<div class="update-bar">
+  <div>
+    <b>Nova versão {{ u.release.version }} disponível</b> <span class="muted small">(você está na {{ u.current_version }})</span>
+    {% if u.release.notes %}<details class="small"><summary>O que mudou</summary><pre class="notes">{{ u.release.notes }}</pre></details>{% endif %}
+  </div>
+  <div id="update-action">
+  {% if u.can_install %}
+    <button class="btn primary" hx-post="/api/update/install" hx-target="#update-action" hx-indicator="#update-spin"
+      hx-confirm="{% if open_count %}Há {{ open_count }} posição(ões) aberta(s). Durante a troca (uns 20 segundos) stop e alvo ficam sem monitoramento; os robôs voltam no mesmo estado depois. {% endif %}Baixar e instalar a versão {{ u.release.version }}?">Atualizar</button>
+    <span id="update-spin" class="htmx-indicator small muted">baixando e conferindo…</span>
+  {% elif u.frozen %}
+    <a class="btn" href="{{ u.release.url }}" target="_blank" rel="noopener">Baixar na página da release</a>
+  {% else %}
+    <span class="small muted">Rodando pelo código-fonte: atualize com <code>git pull</code>.</span>
+  {% endif %}
+  </div>
+</div>
+{% elif forced %}
+<div class="update-bar">{% if u.error %}{{ u.error }}{% else %}Você está na versão mais recente ({{ u.current_version }}).{% endif %}</div>
+{% endif %}

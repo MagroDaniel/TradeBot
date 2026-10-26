@@ -1,0 +1,56 @@
+name: Release (TradeBot.exe)
+
+# Gera o executável do Windows e publica uma Release quando uma tag de versão é enviada:
+#   git tag v0.2.0 && git push origin v0.2.0
+# A tag tem que bater com `__version__` em tradebot/__init__.py, e o CHANGELOG.md precisa ter
+# uma seção "## v0.2.0" (vira o texto da release e as notas no botão "Atualizar" do painel).
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Testes
+        run: pytest -q
+
+      - name: Versão da tag = versão do código
+        run: python scripts/release_notes.py "${{ github.ref_name }}" > release_notes.md
+
+      - name: Gerar TradeBot.exe
+        run: pyinstaller --noconfirm TradeBot.spec
+
+      - name: Autoteste do executável
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\TradeBot.exe -ArgumentList "--self-test" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "self-test falhou ($($p.ExitCode))"; exit 1 }
+
+      - name: SHA-256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\TradeBot.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  TradeBot.exe" | Out-File -Encoding ascii -NoNewline dist\TradeBot.exe.sha256
+          Get-Content dist\TradeBot.exe.sha256
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TradeBot ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: |
+            dist/TradeBot.exe
+            dist/TradeBot.exe.sha256

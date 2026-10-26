@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TradeBot</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="/static/favicon.png">
+  <script src="/static/vendor/htmx-1.9.12.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">TradeBot <span class="muted small">v{{ VERSION }}</span> <span class="badge demo">CONTA DEMO</span></div>
+    <div class="top-actions">
+      <a href="/settings" class="icon-link {{ 'active' if page == 'app_settings' }}" title="Configurações gerais">⚙</a>
+      <button class="btn danger small" hx-post="/api/emergency"
+        hx-confirm="Fechar TODAS as posições de TODOS os robôs a mercado e bloquear novas entradas?">⛔ PARAR TUDO</button>
+    </div>
+  </header>
+  <nav class="tabs">
+    <a href="/" class="tab {{ 'active' if page == 'overview' }}">Visão geral</a>
+    {% for b in nav_bots() %}
+      <a href="/bots/{{ b.id }}" class="tab {{ 'active' if page == 'bot' ~ b.id }}"><span class="dot {{ b.state }}"></span>{{ b.name }}</a>
+    {% endfor %}
+    <a href="/bots/new" class="tab add {{ 'active' if page == 'new' }}">+ Novo robô</a>
+    <a href="/copy" class="tab add {{ 'active' if page == 'copy' }}">Copiar trader</a>
+  </nav>
+  <div id="update-banner" hx-get="/partials/update" hx-trigger="load delay:2s, every 3600s"></div>
+  <main>{% block content %}{% endblock %}</main>
+  <div id="toast" class="toast" hidden></div>
+  <script>
+    document.body.addEventListener("toast", (e) => {
+      const el = document.getElementById("toast");
+      el.textContent = e.detail.value;
+      el.hidden = false;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => (el.hidden = true), 4000);
+    });
+    document.body.addEventListener("htmx:responseError", (e) => {
+      const el = document.getElementById("toast");
+      el.textContent = "Erro: " + (e.detail.xhr.responseText || e.detail.xhr.status);
+      el.hidden = false;
+    });
+  </script>
+</body>
+</html>

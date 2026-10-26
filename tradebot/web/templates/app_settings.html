@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+{% if saved %}<div class="alert ok">Configurações salvas.</div>{% endif %}
+{% if error %}<div class="alert danger">Não salvou: {{ error }}</div>{% endif %}
+<form method="post" action="/settings" class="settings">
+  <section class="card">
+    <h2>Configurações gerais</h2>
+    <p class="muted small">Valem para todos os robôs. As configurações de estratégia, risco e carteira ficam na aba de cada robô.</p>
+    <div class="param-grid">
+      <label>Intervalo do ciclo (segundos)<input type="number" min="3" max="300" name="poll_seconds" value="{{ s.poll_seconds }}"></label>
+      <label>Conta<input type="text" value="Demo local (paper)" disabled></label>
+    </div>
+  </section>
+  <div class="form-actions"><button class="btn primary" type="submit">Salvar</button></div>
+</form>
+<section class="card">
+  <h2>Versão</h2>
+  <p>Você está na versão <b>{{ VERSION }}</b>.</p>
+  <button class="btn" hx-get="/partials/update?force=1" hx-target="#update-banner">Procurar atualização agora</button>
+</section>
+{% endblock %}

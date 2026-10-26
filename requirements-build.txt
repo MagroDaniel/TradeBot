@@ -1,0 +1,4 @@
+# Só pra gerar o .exe (o GitHub Actions usa isto no build da release)
+pyinstaller>=6.10,<7
+pystray>=0.19,<0.20
+pillow>=10,<14

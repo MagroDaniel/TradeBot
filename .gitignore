@@ -4,5 +4,5 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
-crypto-daytrade/backtest/.cache/
-forex-daytrade/backtest/.cache/
+build/
+dist/
